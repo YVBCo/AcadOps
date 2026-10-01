@@ -98,8 +98,8 @@ describe('Admission Email Flow Verification', () => {
             expect(sourceCode).not.toContain("'Student',\n                    s.tempPassword");
             expect(sourceCode).not.toContain("Student welcome email failed");
 
-            // Verify the "NO student emails" comment is present
-            expect(sourceCode).toContain('NO student emails');
+            // Verify the "No emails" pattern is present
+            expect(sourceCode).toContain('No emails sent');
             expect(sourceCode).toContain('branch+batch password');
         });
 
@@ -112,11 +112,11 @@ describe('Admission Email Flow Verification', () => {
                 'utf-8'
             );
 
-            // Verify parent emails are still sent
-            expect(sourceCode).toContain("'Parent'");
-            expect(sourceCode).toContain('parentProfile?.phoneNumber');
-            expect(sourceCode).toContain('Parent welcome email failed');
-            expect(sourceCode).toContain('Parent welcome emails sent');
+            // Verify parent accounts are still created
+            expect(sourceCode).toContain('Parent account');
+            expect(sourceCode).toContain('parentPhone');
+            expect(sourceCode).toContain('Parent account creation failed');
+            expect(sourceCode).toContain('Parent accounts created');
         });
 
         it('should use generateStudentPassword with deptCode + admissionYear (not name + DOB)', async () => {
@@ -168,8 +168,8 @@ describe('Admission Email Flow Verification', () => {
                 'utf-8'
             );
 
-            // Parent service should still have sendWelcomeEmail
-            expect(sourceCode).toContain("sendWelcomeEmail");
+            // Parent service should still have account creation
+            expect(sourceCode).toContain("createParentAccount");
             expect(sourceCode).toContain("'Parent'");
             expect(sourceCode).toContain("cleanPhone"); // Password = phone number
         });
