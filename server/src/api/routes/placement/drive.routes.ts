@@ -16,7 +16,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const drive = await placementService.getDrive(req.tenantId!, parseInt(req.params.id));
+        const drive = await placementService.getDrive(req.tenantId!, parseInt(req.params.id as string));
         res.json(drive);
     } catch (e) { next(e); }
 });
@@ -30,21 +30,21 @@ router.post('/', requireRole('SUPER_ADMIN'), async (req: Request, res: Response,
 
 router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const drive = await placementService.updateDrive(req.tenantId!, parseInt(req.params.id), req.body);
+        const drive = await placementService.updateDrive(req.tenantId!, parseInt(req.params.id as string), req.body);
         res.json(drive);
     } catch (e) { next(e); }
 });
 
 router.post('/:id/rounds', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const round = await placementService.addRound(req.tenantId!, parseInt(req.params.id), req.body);
+        const round = await placementService.addRound(req.tenantId!, parseInt(req.params.id as string), req.body);
         res.json(round);
     } catch (e) { next(e); }
 });
 
 router.patch('/rounds/:roundId/results', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await placementService.updateRoundResults(req.tenantId!, parseInt(req.params.roundId), req.body.results);
+        const result = await placementService.updateRoundResults(req.tenantId!, parseInt(req.params.roundId as string), req.body.results);
         res.json(result);
     } catch (e) { next(e); }
 });

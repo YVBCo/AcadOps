@@ -186,6 +186,23 @@ export const RBAC_MATRIX: Record<UserRole, Partial<Record<ResourceType, Permissi
         MARKS: { actions: ['READ'], scope: 'OWN' },
         NOTIFICATION: { actions: ['READ'], scope: 'OWN' },
     },
+
+    // ============================================
+    // NEW ROLES
+    // ============================================
+    LIBRARIAN: {
+        USER_PROFILE: { actions: ['READ', 'UPDATE'], scope: 'OWN' },
+    },
+    PRINCIPAL: {
+        USER_PROFILE: { actions: ['READ'], scope: 'ALL' },
+        DEPARTMENT: { actions: ['READ'], scope: 'ALL' },
+    },
+    ACCOUNTS_STAFF: {
+        USER_PROFILE: { actions: ['READ', 'UPDATE'], scope: 'OWN' },
+    },
+    PLACEMENT_COMPANY: {
+        USER_PROFILE: { actions: ['READ', 'UPDATE'], scope: 'OWN' },
+    },
 };
 
 // ... (rest of the file)

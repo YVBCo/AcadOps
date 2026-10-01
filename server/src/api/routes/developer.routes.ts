@@ -233,7 +233,7 @@ router.get('/tenants/:id/modules', requireDeveloper, async (req: Request, res: R
 router.patch('/tenants/:id/modules', requireDeveloper, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const tenantId = parseIntParam(req.params.id, 'id');
-        const modulesData = z.record(z.any()).parse(req.body);
+        const modulesData = z.record(z.string(), z.any()).parse(req.body);
         const result = await tenantService.updateModules(tenantId, modulesData);
         res.json(result);
     } catch (error) {

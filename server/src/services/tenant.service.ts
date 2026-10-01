@@ -441,7 +441,7 @@ class TenantService {
         });
 
         const cacheKey = `tenant:modules:${tenantId}`;
-        await cacheService.del(cacheKey);
+        await cacheService.set(cacheKey, null);
 
         return {
             modules: updated.enabledModules,

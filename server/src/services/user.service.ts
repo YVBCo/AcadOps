@@ -299,6 +299,10 @@ class UserService {
             ADMIN_CLERK: 'Administration Clerk',
             FIRST_YEAR_COORDINATOR: 'First Year Coordinator',
             PARENT: 'Parent',
+    LIBRARIAN: 'Librarian',
+    PRINCIPAL: 'Principal',
+    ACCOUNTS_STAFF: 'Accounts Staff',
+    PLACEMENT_COMPANY: 'Placement Company',
         };
         return labels[role];
     }

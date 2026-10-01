@@ -16,7 +16,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const app = await placementService.getApplication(req.tenantId!, parseInt(req.params.id));
+        const app = await placementService.getApplication(req.tenantId!, parseInt(req.params.id as string));
         res.json(app);
     } catch (e) { next(e); }
 });
@@ -30,14 +30,14 @@ router.post('/', requireRole('STUDENT'), async (req: Request, res: Response, nex
 
 router.patch('/:id/status', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const app = await placementService.updateApplicationStatus(req.tenantId!, parseInt(req.params.id), req.body.status, req.body.remarks);
+        const app = await placementService.updateApplicationStatus(req.tenantId!, parseInt(req.params.id as string), req.body.status, req.body.remarks);
         res.json(app);
     } catch (e) { next(e); }
 });
 
 router.patch('/:id/withdraw', requireRole('STUDENT'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const app = await placementService.withdrawApplication(req.tenantId!, parseInt(req.params.id), req.user!.userId);
+        const app = await placementService.withdrawApplication(req.tenantId!, parseInt(req.params.id as string), req.user!.userId);
         res.json(app);
     } catch (e) { next(e); }
 });

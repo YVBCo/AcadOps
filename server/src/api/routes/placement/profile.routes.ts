@@ -38,7 +38,7 @@ router.post('/declaration', requireRole('STUDENT'), async (req: Request, res: Re
 
 router.get('/:userId', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const profile = await placementService.getProfile(req.tenantId!, parseInt(req.params.userId));
+        const profile = await placementService.getProfile(req.tenantId!, parseInt(req.params.userId as string));
         res.json(profile);
     } catch (e) { next(e); }
 });

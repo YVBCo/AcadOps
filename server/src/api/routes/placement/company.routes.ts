@@ -15,7 +15,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const company = await placementService.getCompany(req.tenantId!, parseInt(req.params.id));
+        const company = await placementService.getCompany(req.tenantId!, parseInt(req.params.id as string));
         res.json(company);
     } catch (e) { next(e); }
 });
@@ -29,14 +29,14 @@ router.post('/', requireRole('SUPER_ADMIN', 'PLACEMENT_COMPANY'), async (req: Re
 
 router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const company = await placementService.updateCompany(req.tenantId!, parseInt(req.params.id), req.body);
+        const company = await placementService.updateCompany(req.tenantId!, parseInt(req.params.id as string), req.body);
         res.json(company);
     } catch (e) { next(e); }
 });
 
 router.post('/:id/verify', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const company = await placementService.verifyCompany(req.tenantId!, parseInt(req.params.id));
+        const company = await placementService.verifyCompany(req.tenantId!, parseInt(req.params.id as string));
         res.json(company);
     } catch (e) { next(e); }
 });

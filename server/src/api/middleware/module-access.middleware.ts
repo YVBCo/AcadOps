@@ -47,7 +47,7 @@ export const checkModuleAccess = (modulePath: string) => {
 
             if (!enabledModules) {
                 enabledModules = await tenantService.getModules(tenantId);
-                await cacheService.set(cacheKey, enabledModules || {}, CacheTTL.ONE_MINUTE);
+                await cacheService.set(cacheKey, enabledModules || {}, CacheTTL.SHORT);
             }
 
             if (!isModuleEnabled(enabledModules || {}, modulePath)) {

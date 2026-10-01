@@ -22,7 +22,7 @@ const rejectSchema = z.object({
 
 router.patch('/:id/clear', authenticate, requireRole('TEACHER'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.CLEARED });
+        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.COMPLETED });
         res.json(result);
     } catch (error) {
         next(error);
@@ -32,7 +32,7 @@ router.patch('/:id/clear', authenticate, requireRole('TEACHER'), async (req: Req
 router.patch('/:id/reject', authenticate, requireRole('TEACHER'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = rejectSchema.parse(req.body);
-        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.REJECTED, remarks: data.remarks });
+        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.WAIVED, remarks: data.remarks });
         res.json(result);
     } catch (error) {
         next(error);
@@ -43,7 +43,7 @@ router.get('/student/:studentId', authenticate, async (req: Request, res: Respon
     try {
         const enrollments = await prisma.nodueSubjectEnrollment.findMany({
             where: { tenantId: req.tenantId!, studentId: Number(req.params.studentId) },
-            include: { subject: { select: { id: true, name: true, code: true } } },
+            include: { subject: { select: { id: true, course: { select: { name: true, code: true } } } } },
         });
         res.json(enrollments);
     } catch (error) {

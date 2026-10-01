@@ -15,7 +15,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const job = await placementService.getJob(req.tenantId!, parseInt(req.params.id));
+        const job = await placementService.getJob(req.tenantId!, parseInt(req.params.id as string));
         res.json(job);
     } catch (e) { next(e); }
 });
@@ -32,21 +32,21 @@ router.post('/', requireRole('SUPER_ADMIN', 'PLACEMENT_COMPANY'), async (req: Re
 
 router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const job = await placementService.updateJob(req.tenantId!, parseInt(req.params.id), req.body);
+        const job = await placementService.updateJob(req.tenantId!, parseInt(req.params.id as string), req.body);
         res.json(job);
     } catch (e) { next(e); }
 });
 
 router.post('/:id/approve', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const job = await placementService.approveJob(req.tenantId!, parseInt(req.params.id));
+        const job = await placementService.approveJob(req.tenantId!, parseInt(req.params.id as string));
         res.json(job);
     } catch (e) { next(e); }
 });
 
 router.get('/:id/eligible-students', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const students = await placementService.getEligibleStudents(req.tenantId!, parseInt(req.params.id));
+        const students = await placementService.getEligibleStudents(req.tenantId!, parseInt(req.params.id as string));
         res.json(students);
     } catch (e) { next(e); }
 });

@@ -67,7 +67,7 @@ class NodueService {
             where: { tenantId, teacherId },
             include: {
                 student: { select: { id: true, name: true, email: true } },
-                subject: { select: { id: true, name: true, code: true } }
+                subject: { select: { id: true, course: { select: { name: true, code: true } } } }
             }
         });
     }
@@ -83,7 +83,7 @@ class NodueService {
             where: { id: enrollmentId },
             data: {
                 status: data.status,
-                isFacultyCleared: data.status === NodueDueStatus.CLEARED,
+                isFacultyCleared: data.status === NodueDueStatus.COMPLETED,
                 remarks: data.remarks,
             },
         });
@@ -108,7 +108,7 @@ class NodueService {
             where: { id: dueId },
             data: {
                 ...data,
-                hasDues: data.status === NodueDueStatus.CLEARED ? false : due.hasDues,
+                hasDues: data.status === NodueDueStatus.COMPLETED ? false : due.hasDues,
             },
         });
 
@@ -138,7 +138,7 @@ class NodueService {
             where: { id: dueId },
             data: {
                 ...data,
-                hasDues: data.status === NodueDueStatus.CLEARED ? false : due.hasDues,
+                hasDues: data.status === NodueDueStatus.COMPLETED ? false : due.hasDues,
             },
         });
 
@@ -170,7 +170,7 @@ class NodueService {
             where: { id: request.id },
             data: { 
                 currentStage: NodueClearanceStage.CLEARED,
-                status: NodueDueStatus.CLEARED,
+                status: NodueDueStatus.COMPLETED,
                 clearedAt: new Date(),
             },
         });
@@ -219,17 +219,17 @@ class NodueService {
 
         if (stage === NodueClearanceStage.FACULTY_REVIEW) {
             const enrollments = await prisma.nodueSubjectEnrollment.findMany({ where: { tenantId, studentId } });
-            const allCleared = enrollments.every(e => e.isFacultyCleared || e.status === NodueDueStatus.CLEARED);
+            const allCleared = enrollments.every(e => e.isFacultyCleared || e.status === NodueDueStatus.COMPLETED);
             if (allCleared) stage = NodueClearanceStage.LIBRARY_REVIEW;
         }
 
         if (stage === NodueClearanceStage.LIBRARY_REVIEW) {
-            const libraryDues = await prisma.nodueLibraryDue.findMany({ where: { tenantId, studentId, hasDues: true, status: { not: NodueDueStatus.CLEARED } } });
+            const libraryDues = await prisma.nodueLibraryDue.findMany({ where: { tenantId, studentId, hasDues: true, status: { not: NodueDueStatus.COMPLETED } } });
             if (libraryDues.length === 0) stage = NodueClearanceStage.DEPARTMENT_REVIEW;
         }
 
         if (stage === NodueClearanceStage.DEPARTMENT_REVIEW) {
-            const studentDues = await prisma.nodueStudentDue.findMany({ where: { tenantId, studentId, hasDues: true, status: { not: NodueDueStatus.CLEARED } } });
+            const studentDues = await prisma.nodueStudentDue.findMany({ where: { tenantId, studentId, hasDues: true, status: { not: NodueDueStatus.COMPLETED } } });
             if (studentDues.length === 0) stage = NodueClearanceStage.HOD_REVIEW;
         }
 

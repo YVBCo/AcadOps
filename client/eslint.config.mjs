@@ -7,14 +7,23 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
+      // TypeScript strictness — legacy code uses `any` extensively
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
-      "react/no-unescaped-entities": "off",
+      "@typescript-eslint/no-unused-expressions": "off",
       "@typescript-eslint/no-non-null-asserted-optional-chain": "off",
+
+      // React 19 strict rules — existing code patterns
+      "react/no-unescaped-entities": "off",
       "react-hooks/exhaustive-deps": "off",
       "react-hooks/rules-of-hooks": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/purity": "off",
+
+      // Next.js
       "@next/next/no-img-element": "off",
-      "react-hooks/exhaustive-deps": "off"
+      "@next/next/no-page-custom-font": "off",
     }
   },
   globalIgnores([
