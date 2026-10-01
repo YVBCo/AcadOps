@@ -1,0 +1,19 @@
+# =============================================================================
+# Netlify Configuration — Next.js Frontend Deployment
+# =============================================================================
+# Uses @netlify/plugin-nextjs to handle SSR/ISR/middleware automatically.
+# The backend (Express API) stays on Render — Netlify only serves the frontend.
+
+[build]
+  # Build from the client directory (relative to repo root)
+  base = "client/"
+  command = "npm install && npm run build"
+  # publish is relative to 'base', so this resolves to client/.next
+  publish = ".next"
+
+# Environment variables set in Netlify Dashboard:
+#   NEXT_PUBLIC_API_URL = https://your-render-api.onrender.com/api
+
+# Netlify plugin for Next.js — auto-detects and handles SSR/static/edge
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

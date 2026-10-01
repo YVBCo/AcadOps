@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+.netlify/
+tsconfig.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Uploads (user-generated content)
+uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug scripts
+server/debug-startup.ts
+server/check-db.mjs
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,58 @@
+# =============================================================================
+# Client Dockerfile — Multi-stage build for Next.js (standalone)
+# =============================================================================
+
+# --- Stage 1: Install dependencies ---
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY client/package.json ./client/
+COPY server/package.json ./server/
+
+RUN npm ci --workspace=client --ignore-scripts
+
+# --- Stage 2: Build ---
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY client/package.json ./client/
+COPY server/package.json ./server/
+
+RUN npm ci --ignore-scripts
+
+# Copy client source
+COPY client/ ./client/
+
+# Remove local env files — they override Docker ARG/ENV and contain localhost URLs
+RUN rm -f client/.env.local client/.env.production client/.env
+
+# Build Next.js (standalone output)
+# NEXT_PUBLIC_* vars must be available at build time (baked into the JS bundle)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN cd client && npm run build
+
+# --- Stage 3: Production runtime ---
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+# Add non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001 -G appgroup
+
+# Copy standalone output
+COPY --from=build /app/client/.next/standalone ./
+COPY --from=build /app/client/.next/static ./client/.next/static
+COPY --from=build /app/client/public ./client/public
+
+USER appuser
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME="0.0.0.0"
+EXPOSE 3001
+
+CMD ["node", "client/server.js"]

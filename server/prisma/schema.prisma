@@ -1,0 +1,2260 @@
+// Prisma Schema for Academic Operations Platform
+// Reflects the ERD: College -> Department -> Program -> Course -> Subject (Semester Instance)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: url and directUrl are now in prisma.config.ts
+}
+// ============================================
+// MULTI-TENANCY & DEVELOPER PORTAL
+// ============================================
+
+enum TenantType {
+  ENGINEERING
+  MEDICAL
+  DEGREE
+  MBA
+  MCA
+  LAW
+  PHARMACY
+  AYURVEDIC
+  PARAMEDICAL
+  OTHER
+}
+
+// Top-level developer users (above all tenants)
+model Developer {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("developers")
+}
+
+// Tenant = One college/institution
+model Tenant {
+  id           Int          @id @default(autoincrement())
+  name         String       // "ABC Engineering College"
+  slug         String       @unique  // "abc-engineering" (for URL)
+  type         TenantType   @default(ENGINEERING)
+  maxUsers     Int          @default(500) @map("max_users")
+  isActive     Boolean      @default(true) @map("is_active")
+  contactEmail String?      @map("contact_email")
+  contactPhone String?      @map("contact_phone")
+  address      String?
+  logoUrl      String?      @map("logo_url")
+  logoData     String?      @map("logo_data")       @db.Text  // Base64 data URI for tenant logo
+  loginBgImage String?      @map("login_bg_image")
+  loginBgData  String?      @map("login_bg_data")   @db.Text  // Base64 data URI for login background
+  enabledModules Json       @default("{}") @map("enabled_modules")  // Module toggle configuration
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at")
+
+  // Relations — all child models
+  users          User[]
+  departments    Department[]
+  batches        Batch[]
+  semesters      Semester[]
+  courses        Course[]
+  programs       Program[]
+  sections       Section[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  systemErrors   SystemError[]
+  emailLogs      EmailLog[]
+  admissionFormConfig AdmissionFormConfig?
+  chatConversations  ChatConversation[]
+  classrooms         Classroom[]
+  timetableSlots     TimetableSlot[]
+  academicCalendarDays AcademicCalendarDay[]
+  // No-Due module relations
+  nodueEnrollments       NodueSubjectEnrollment[]
+  nodueClearanceRequests NodueClearanceRequest[]
+  nodueStudentDues       NodueStudentDue[]
+  nodueLibraryDues       NodueLibraryDue[]
+  nodueAttendanceCategories NodueAttendanceCategory[]
+  nodueFineApprovals     NodueFineApproval[]
+  noduePaymentOrders     NoduePaymentOrder[]
+  nodueClearanceTemplates NodueClearanceTemplate[]
+  nodueAicteActivities   NodueAicteActivity[]
+  nodueActivityLogs      NodueActivityLog[]
+  // PlacePro module relations
+  placementCompanies     PlacementCompany[]
+  placementJobs          PlacementJob[]
+  placementDrives        PlacementDrive[]
+  placementApplications  PlacementApplication[]
+  placementProfiles      PlacementStudentProfile[]
+  placementAssessments   PlacementAssessment[]
+
+  @@map("tenants")
+}
+
+// Error tracking for developer dashboard
+model SystemError {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int?      @map("tenant_id")
+  errorCode    String    @map("error_code")     // e.g. "AUTH_FAILED", "DB_ERROR"
+  message      String
+  stack        String?
+  endpoint     String?                            // API endpoint that caused it
+  method       String?                            // HTTP method
+  userId       Int?      @map("user_id")
+  metadata     Json?                              // Extra context
+  severity     String    @default("ERROR")        // ERROR, WARNING, CRITICAL
+  resolved     Boolean   @default(false)
+  resolvedAt   DateTime? @map("resolved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([severity, resolved])
+  @@index([createdAt])
+  @@map("system_errors")
+}
+
+model EmailLog {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int?      @map("tenant_id")
+  to           String                                // Recipient email
+  subject      String
+  status       String    @default("PENDING")         // PENDING, SENT, FAILED
+  provider     String    @default("log")             // smtp, brevo, log
+  messageId    String?   @map("message_id")          // Provider message ID
+  errorMessage String?   @map("error_message")       // Error if failed
+  emailType    String?   @map("email_type")          // WELCOME, RESET, NOTIFICATION, etc.
+  userId       Int?      @map("user_id")             // Linked user (if applicable)
+  retryCount   Int       @default(0) @map("retry_count")
+  sentAt       DateTime? @map("sent_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+  @@index([to, createdAt])
+  @@index([emailType, status])
+  @@map("email_logs")
+}
+
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  DEPARTMENT_ADMIN
+  SUPER_ADMIN
+  COE
+  CLERK
+  ADMISSIONS_ADMIN
+  ADMIN_CLERK
+  FIRST_YEAR_COORDINATOR
+  PARENT
+  // No-Due module roles
+  LIBRARIAN
+  PRINCIPAL
+  ACCOUNTS_STAFF
+  // PlacePro module roles
+  PLACEMENT_COMPANY
+}
+
+enum ChatStatus {
+  ACTIVE
+  RESOLVED
+  ARCHIVED
+}
+
+enum AdmissionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum EditRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EditRequestType {
+  ATTENDANCE
+  MARKS
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int       @map("tenant_id")
+  email         String
+  passwordHash  String    @map("password_hash")
+  name          String
+  isActive      Boolean   @default(true) @map("is_active")
+  role          UserRole  @default(STUDENT)
+  departmentId  Int?      @map("department_id")
+  failedLoginAttempts Int  @default(0) @map("failed_login_attempts")
+  lockedUntil   DateTime? @map("locked_until")
+  tokenVersion  Int       @default(0) @map("token_version")
+  lastPasswordChangedAt DateTime? @map("last_password_changed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  passwordResetTokens PasswordResetToken[]
+  passwordResetOtps   PasswordResetOtp[]
+  department    Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  notifications  Notification[]
+  auditLogs      AuditLog[]       @relation("AuditActor")
+  editRequestsRequested EditRequest[] @relation("EditRequester")
+  editRequestsReviewed  EditRequest[] @relation("EditReviewer")
+  
+  // COE Relations
+  internalMarksSubmitted InternalMarksSubmission[] @relation("InternalMarksSubmitter")
+  semesterMarksEntered   SemesterEndMarks[]        @relation("MarksEnteredBy")
+  semesterMarksApproved  SemesterEndMarks[]        @relation("MarksApprovedBy")
+  resultsFinalized       Result[]                  @relation("ResultFinalizer")
+  revaluationsEntered    Revaluation[]             @relation("RevalEnteredBy")
+  revaluationsApproved   Revaluation[]             @relation("RevalApprovedBy")
+  
+  // Dept Admin Relations
+  internalMarksUpdated   InternalMarksDetail[]     @relation("InternalMarksUpdater")
+  timetablesUploaded     SectionTimetable[]        @relation("TimetableUploader")
+  substitutionsAssigned  TeacherSubstitution[]     @relation("SubstitutionAssigner")
+  calendarDaysDeclared   AcademicCalendarDay[]     @relation("CalendarDeclarer")
+  
+  // Mentor Relations
+  mentorAssignmentsMade  MentorAssignment[]        @relation("MentorAssignedBy")
+
+  // Admissions Relations
+  admissionsEntered      AdmissionData[]           @relation("AdmissionEnteredBy")
+  admissionsApproved     AdmissionData[]           @relation("AdmissionApprovedBy")
+  usnRequestsMade        USNRequest[]              @relation("USNRequester")
+  usnRequestsReviewed    USNRequest[]              @relation("USNReviewer")
+  studentEditRequestsMade       StudentEditRequest[]      @relation("EditRequestRequester")
+  studentEditRequestsReviewed   StudentEditRequest[]      @relation("EditRequestReviewer")
+
+  // Semester Marks Upload Relations
+  marksUploaded          SemesterMarkUpload[]      @relation("UploadedMarks")
+  marksReviewed          SemesterMarkUpload[]      @relation("ReviewedMarks")
+  marksPosted            SemesterMarkUpload[]      @relation("PostedMarks")
+  marksEntries           SemesterMarkEntry[]       @relation("StudentMarksEntries")
+  parsingCorrections     ParsingCorrection[]       @relation("ParsingCorrector")
+
+  // First Year Coordinator Relations
+  cycleDepartmentAllocations CycleDepartmentAllocation[] @relation("CycleAllocator")
+
+  // Parent Relations
+  parentProfile              ParentProfile?
+  chatConversationsAsParent  ChatConversation[] @relation("ChatParent")
+  chatConversationsAsMentor  ChatConversation[] @relation("ChatMentor")
+  chatConversationsEscalated ChatConversation[] @relation("ChatEscalatedTo")
+  chatMessagesSent           ChatMessage[]      @relation("ChatMessageSender")
+
+  // No-Due module relations
+  nodueEnrollmentsAsStudent  NodueSubjectEnrollment[] @relation("NodueStudent")
+  nodueEnrollmentsAsTeacher  NodueSubjectEnrollment[] @relation("NodueTeacher")
+  nodueClearanceRequests     NodueClearanceRequest[]   @relation("NodueClearanceStudent")
+  nodueStudentDues           NodueStudentDue[]         @relation("NodueStudentDues")
+  nodueLibraryDues           NodueLibraryDue[]         @relation("NodueLibraryDues")
+  nodueFineApprovals         NodueFineApproval[]       @relation("NodueFineApprover")
+  noduePaymentOrders         NoduePaymentOrder[]       @relation("NoduePaymentStudent")
+  nodueAicteActivitiesStudent NodueAicteActivity[]     @relation("NodueAicteStudent")
+  nodueAicteActivitiesVerifier NodueAicteActivity[]    @relation("NodueAicteVerifier")
+  nodueActivityLogs          NodueActivityLog[]        @relation("NodueLogUser")
+
+  // PlacePro module relations
+  placementCompanyProfile    PlacementCompany?         @relation("PlacementCompanyUser")
+  placementDrivesCreated     PlacementDrive[]          @relation("PlacementDriveCreator")
+  placementApplications      PlacementApplication[]    @relation("PlacementApplicant")
+  placementProfile           PlacementStudentProfile?  @relation("PlacementProfile")
+  placementAssessmentsCreated PlacementAssessment[]    @relation("PlacementAssessmentCreator")
+  placementFeedback          PlacementFeedback[]       @relation("PlacementFeedbackUser")
+
+  @@unique([tenantId, email])
+  @@index([tenantId, email, isActive])
+  @@index([tenantId, role, isActive])
+  @@index([departmentId, role])
+  @@index([createdAt])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model StudentProfile {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique @map("user_id")
+  rollNumber    String    @unique @map("roll_number")
+  programId     Int?      @map("program_id")  // Optional - assigned by Department Admin later
+  semesterId    Int?      @map("current_semester_id")
+  currentSemester Int     @default(1) @map("current_semester")
+  admissionYear Int       @map("admission_year")
+  sectionId     Int?      @map("section_id")
+  batchId       Int?      @map("batch_id")
+  
+  // Cycle department for Sem 1-2 (PHY or CHEM assigned by admin)
+  cycleDepartmentId    Int?    @map("cycle_department_id")
+  
+  // Opted/final department from Sem 3 onwards (CS, EC, etc.)
+  optedDepartmentId    Int?    @map("opted_department_id")
+
+  // Admission & USN fields
+  temporaryUsn         String?  @unique @map("temporary_usn")   // e.g. CS001
+  permanentUsn         String?  @unique @map("permanent_usn")   // e.g. 4MH23CS185
+  admissionId          String?  @unique @map("admission_id")    // e.g. ADM000123
+  isPermanentUsnLocked Boolean  @default(false) @map("is_permanent_usn_locked")
+  isLateralEntry       Boolean  @default(false) @map("is_lateral_entry")
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program       Program?    @relation(fields: [programId], references: [id])
+  semester      Semester?   @relation(fields: [semesterId], references: [id])
+  section       Section?    @relation(fields: [sectionId], references: [id])
+  batch         Batch?      @relation(fields: [batchId], references: [id])
+  cycleDepartment   Department? @relation("CycleDepartment", fields: [cycleDepartmentId], references: [id])
+  optedDepartment   Department? @relation("OptedDepartment", fields: [optedDepartmentId], references: [id])
+  enrollments   Enrollment[]
+  attendances   Attendance[]
+  submissions   Submission[]
+  marks         Marks[]
+  certificates  Certificate[]
+  mentorAssignments MentorAssignment[]
+  admissionData     AdmissionData?
+  usnRequests       USNRequest[]
+  editRequests      StudentEditRequest[]
+  parentProfile     ParentProfile?
+  chatConversations ChatConversation[]
+
+  @@index([rollNumber])
+  @@index([admissionYear, currentSemester])
+  @@index([batchId, sectionId])
+  @@index([permanentUsn])
+  @@index([temporaryUsn])
+  @@index([cycleDepartmentId])
+  @@index([optedDepartmentId])
+  @@index([admissionId])
+  @@index([optedDepartmentId, temporaryUsn])
+  @@index([sectionId, currentSemester])
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("student_profiles")
+}
+
+model TeacherProfile {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique @map("user_id")
+  employeeId    String    @unique @map("employee_id")
+  designation   String?
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectAssignments SubjectTeacher[]
+  courseAllocations  CourseAllocation[]
+  mentorAssignments  MentorAssignment[]
+  approvedMarks      InternalMarksDetail[] @relation("MentorApprovedMarks")
+  substitutionsAsOriginal  TeacherSubstitution[] @relation("OriginalTeacher")
+  substitutionsAsSubstitute TeacherSubstitution[] @relation("SubstituteTeacher")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("teacher_profiles")
+}
+
+// ============================================
+// ACADEMIC STRUCTURE
+// ============================================
+
+model Department {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int       @map("tenant_id")
+  name        String
+  code        String    // e.g., "CSE", "ECE", "PHY", "CHEM"
+  description String?
+  isCycleDepartment Boolean @default(false) @map("is_cycle_department")  // True for PHY/CHEM
+  isAdmissionOpen   Boolean   @default(true) @map("is_admission_open")
+  admissionClosedAt DateTime? @map("admission_closed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  users       User[]
+  programs    Program[]
+  courses     Course[]
+  sections    Section[]
+  internalMarks InternalMarksSubmission[]
+  semesterMarks SemesterEndMarks[]
+  results     Result[]
+  timeSlotConfig DepartmentTimeSlotConfig?
+  cycleStudents StudentProfile[] @relation("CycleDepartment")
+  optedStudents StudentProfile[] @relation("OptedDepartment")
+  mentorAssignments MentorAssignment[]
+  semesterMarkUploads SemesterMarkUpload[]
+  cycleAllocationsAsOpted CycleDepartmentAllocation[] @relation("AllocatedOptedDept")
+  cycleAllocationsAsCycle CycleDepartmentAllocation[] @relation("AllocatedCycleDept")
+  academicCalendarDays AcademicCalendarDay[]
+  nodueAttendanceCategories NodueAttendanceCategory[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("departments")
+}
+
+model Program {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int       @map("tenant_id")
+  name          String    // e.g., "B.Tech Computer Science"
+  code          String    // e.g., "BTCS"
+  // departmentId removed for Many-to-Many
+  durationYears Int       @default(4) @map("duration_years")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  departments   Department[]   // Many-to-Many
+  students      StudentProfile[]
+  courses       Course[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("programs")
+}
+
+model Section {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int       @map("tenant_id")
+  name        String    // e.g., "A", "B", "C"
+  departmentId Int      @map("department_id")  // Department owning this section
+  batchId     Int       @map("batch_id")       // Batch (2023, 2024, etc.)
+  isLocked    Boolean   @default(false) @map("is_locked") // Lock after finalization
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  department  Department       @relation(fields: [departmentId], references: [id])
+  batch       Batch            @relation(fields: [batchId], references: [id])
+  students    StudentProfile[]
+  timetables  SectionTimetable[]
+  internalMarks InternalMarksDetail[]
+  courseAllocations CourseAllocation[]
+  mentorAssignments MentorAssignment[]
+  timetableSlots    TimetableSlot[]
+  timetableConfigs  TimetableConfig[]
+
+  @@unique([departmentId, batchId, name])
+  @@index([departmentId, batchId])
+  @@index([batchId, isLocked])
+  @@map("sections")
+}
+
+// Course = Template/Catalog Entry (NOT time-bound)
+model Course {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int       @map("tenant_id")
+  name          String    // e.g., "Data Structures"
+  code          String    // e.g., "CS201"
+  credits       Int       @default(3)
+  departmentId  Int       @map("department_id")
+  programId     Int?      @map("program_id")
+  semesterNumber Int?     @map("semester_number") // 1-8 for which semester this course belongs
+  targetBatchId Int?      @map("target_batch_id") // Batch to auto-assign on lock
+  description   String?
+  internalMarks Int       @default(50) @map("internal_marks") // Out of 50
+  externalMarks Int       @default(50) @map("external_marks") // Out of 50
+  isLocked      Boolean   @default(false) @map("is_locked") // Locked after publishing to depts
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  lockedAt      DateTime? @map("locked_at")
+
+  // Relations
+  tenant        Tenant     @relation(fields: [tenantId], references: [id])
+  department    Department @relation(fields: [departmentId], references: [id])
+  program       Program?   @relation(fields: [programId], references: [id])
+  targetBatch   Batch?     @relation("CourseTargetBatch", fields: [targetBatchId], references: [id])
+  subjects      Subject[]  // Instances of this course in different semesters
+  internalMarksSubmissions InternalMarksSubmission[]
+  internalMarksDetails     InternalMarksDetail[]
+  internalAssessmentConfigs InternalAssessmentConfig[]
+  courseAllocations        CourseAllocation[]
+  semesterEndMarks         SemesterEndMarks[]
+  results                  Result[]
+  semesterMarkUploads      SemesterMarkUpload[]
+  semesterMarkEntries      SemesterMarkEntry[]
+  substitutionsAsCourse    TeacherSubstitution[] @relation("SubstituteCourse")
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([departmentId, semesterNumber])
+  @@index([programId, semesterNumber])
+  @@index([isLocked])
+  @@map("courses")
+}
+
+// ============================================
+// BATCH & SEMESTER LIFECYCLE
+// ============================================
+
+// Batch = Year-wise student cohort (e.g., "2024" = admitted in 2024)
+model Batch {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int       @map("tenant_id")
+  name        String    // e.g., "2024"
+  startYear   Int       @map("start_year")
+  currentSemester Int   @default(1) @map("current_semester")
+  isGraduated Boolean   @default(false) @map("is_graduated")
+  graduatedAt DateTime? @map("graduated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  students    StudentProfile[]
+  sections    Section[]
+  internalMarks InternalMarksSubmission[]
+  internalMarksDetails InternalMarksDetail[]
+  semesterMarks SemesterEndMarks[]
+  results     Result[]
+  mentorAssignments MentorAssignment[]
+  semesterMarkUploads SemesterMarkUpload[]
+  cycleDepartmentAllocations CycleDepartmentAllocation[]
+  targetedCourses Course[] @relation("CourseTargetBatch")
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([name])
+  @@index([currentSemester, isGraduated])
+  @@index([startYear])
+  @@map("batches")
+}
+
+enum SemesterStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Semester {
+  id          Int             @id @default(autoincrement())
+  tenantId    Int             @map("tenant_id")
+  name        String          // e.g., "Fall 2024"
+  startDate   DateTime        @map("start_date")
+  endDate     DateTime        @map("end_date")
+  status      SemesterStatus  @default(ACTIVE)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  subjects    Subject[]
+  students    StudentProfile[]
+  timetables  SectionTimetable[]
+  timetableSlots  TimetableSlot[]
+  timetableConfigs TimetableConfig[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@map("semesters")
+}
+
+// Subject = Course INSTANCE in a specific Semester
+model Subject {
+  id          Int       @id @default(autoincrement())
+  courseId    Int       @map("course_id")
+  semesterId  Int       @map("semester_id")
+  section     String?   // e.g., "A", "B"
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  course      Course       @relation(fields: [courseId], references: [id])
+  semester    Semester     @relation(fields: [semesterId], references: [id])
+  teachers    SubjectTeacher[]
+  enrollments Enrollment[]
+  attendances Attendance[]
+  assignments Assignment[]
+  marks       Marks[]
+  nodueEnrollments NodueSubjectEnrollment[]
+
+  @@unique([courseId, semesterId, section])
+  @@index([courseId, semesterId])
+  @@map("subjects")
+}
+
+model SubjectTeacher {
+  id          Int       @id @default(autoincrement())
+  subjectId   Int       @map("subject_id")
+  teacherId   Int       @map("teacher_id")
+  isPrimary   Boolean   @default(false) @map("is_primary")
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+
+  // Relations
+  subject     Subject         @relation(fields: [subjectId], references: [id])
+  teacher     TeacherProfile  @relation(fields: [teacherId], references: [id])
+
+  @@unique([subjectId, teacherId])
+  @@map("subject_teachers")
+}
+
+// ============================================
+// OPERATIONS & RECORDS
+// ============================================
+
+model Enrollment {
+  id          Int       @id @default(autoincrement())
+  studentId   Int       @map("student_id")
+  subjectId   Int       @map("subject_id")
+  enrolledAt  DateTime  @default(now()) @map("enrolled_at")
+
+  // Relations
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  subject     Subject        @relation(fields: [subjectId], references: [id])
+
+  @@unique([studentId, subjectId]) // Prevents duplicate enrollment
+  @@map("enrollments")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model Attendance {
+  id          Int               @id @default(autoincrement())
+  studentId   Int               @map("student_id")
+  subjectId   Int               @map("subject_id")
+  date        DateTime          @db.Date
+  status      AttendanceStatus
+  remarks     String?
+  isLocked    Boolean           @default(false) @map("is_locked") // Dept Admin can lock
+  editReason  String?           @map("edit_reason") // Required for edits
+  markedAt    DateTime          @default(now()) @map("marked_at")
+
+  // Relations
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  subject     Subject        @relation(fields: [subjectId], references: [id])
+
+  @@unique([studentId, subjectId, date])
+  @@index([subjectId, date])
+  @@index([studentId, date])
+  @@index([subjectId, date, isLocked])
+  @@index([studentId, status])
+  @@map("attendances")
+}
+
+model Assignment {
+  id          Int       @id @default(autoincrement())
+  subjectId   Int       @map("subject_id")
+  title       String
+  description String?
+  dueDate     DateTime  @map("due_date")
+  maxScore    Int       @default(100) @map("max_score")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  subject     Subject      @relation(fields: [subjectId], references: [id])
+  submissions Submission[]
+
+  @@map("assignments")
+}
+
+model Submission {
+  id            Int       @id @default(autoincrement())
+  assignmentId  Int       @map("assignment_id")
+  studentId     Int       @map("student_id")
+  fileUrl       String?   @map("file_url")
+  content       String?   // For text submissions
+  submittedAt   DateTime  @default(now()) @map("submitted_at")
+  isLate        Boolean   @default(false) @map("is_late")
+  score         Int?
+  feedback      String?
+
+  // Relations
+  assignment    Assignment      @relation(fields: [assignmentId], references: [id])
+  student       StudentProfile  @relation(fields: [studentId], references: [id])
+
+  @@unique([assignmentId, studentId])
+  @@map("submissions")
+}
+
+enum ExamType {
+  MIDTERM
+  FINAL
+  QUIZ
+  PRACTICAL
+  INTERNAL
+}
+
+model Marks {
+  id          Int       @id @default(autoincrement())
+  studentId   Int       @map("student_id")
+  subjectId   Int       @map("subject_id")
+  examType    ExamType  @map("exam_type")
+  score       Float
+  maxScore    Float     @default(100) @map("max_score")
+  remarks     String?
+  gradedAt    DateTime  @default(now()) @map("graded_at")
+
+  // Relations
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  subject     Subject        @relation(fields: [subjectId], references: [id])
+
+  @@unique([studentId, subjectId, examType])
+  @@map("marks")
+}
+
+enum CertificateStatus {
+  DRAFT
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+model Certificate {
+  id              Int               @id @default(autoincrement())
+  studentId       Int               @map("student_id")
+  type            String            // e.g., "Bonafide", "Completion"
+  status          CertificateStatus @default(DRAFT)
+  issuedAt        DateTime?         @map("issued_at")
+  verifiedBy      Int?              @map("verified_by")
+  documentUrl     String?           @map("document_url")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  // Relations
+  student         StudentProfile @relation(fields: [studentId], references: [id])
+
+  @@map("certificates")
+}
+
+// ============================================
+// NOTIFICATIONS & AUDIT
+// ============================================
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int       @map("tenant_id")
+  userId      Int       @map("user_id")
+  title       String
+  message     String
+  isRead      Boolean   @default(false) @map("is_read")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  tenant      Tenant @relation(fields: [tenantId], references: [id])
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// Immutable Audit Log - Critical for Governance
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int?      @map("tenant_id")
+  actorId     Int?      @map("actor_id")
+  action      String    // e.g., "CREATE_DEPARTMENT", "CLOSE_SEMESTER"
+  entityType  String    @map("entity_type") // e.g., "Department", "Marks"
+  entityId    Int?      @map("entity_id")
+  oldValue    Json?     @map("old_value")
+  newValue    Json?     @map("new_value")
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  timestamp   DateTime  @default(now())
+
+  // Relations
+  tenant      Tenant? @relation(fields: [tenantId], references: [id])
+  actor       User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([action, entityType])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+// Edit Request - Teacher asks admin for approval to edit existing records
+model EditRequest {
+  id            Int               @id @default(autoincrement())
+  type          EditRequestType
+  requesterId   Int               @map("requester_id")
+  subjectId     Int               @map("subject_id")
+  entityType    String            @map("entity_type") // "Attendance" or "Marks"
+  entityId      Int               @map("entity_id")
+  oldValue      Json              @map("old_value")
+  newValue      Json              @map("new_value")
+  reason        String?
+  status        EditRequestStatus @default(PENDING)
+  reviewerId    Int?              @map("reviewer_id")
+  reviewNote    String?           @map("review_note")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  reviewedAt    DateTime?         @map("reviewed_at")
+
+  // Relations
+  requester     User              @relation("EditRequester", fields: [requesterId], references: [id])
+  reviewer      User?             @relation("EditReviewer", fields: [reviewerId], references: [id])
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([subjectId])
+  @@map("edit_requests")
+}
+
+// ============================================
+// COE - MARKS & RESULTS
+// ============================================
+
+enum MarksStatus {
+  PENDING
+  APPROVED
+  LOCKED
+}
+
+enum ResultStatus {
+  PASS
+  MAKEUP_ELIGIBLE
+  FAIL
+}
+
+// Internal marks submitted by Department Admin (Final only, no breakdown)
+model InternalMarksSubmission {
+  id            Int      @id @default(autoincrement())
+  departmentId  Int      @map("department_id")
+  batchId       Int      @map("batch_id")
+  courseId      Int      @map("course_id")
+  studentUsn    String   @map("student_usn")
+  marks         Int      // Out of 50
+  submittedBy   Int      @map("submitted_by") // Department Admin
+  submittedAt   DateTime @default(now()) @map("submitted_at")
+
+  // Relations
+  department    Department @relation(fields: [departmentId], references: [id])
+  batch         Batch      @relation(fields: [batchId], references: [id])
+  course        Course     @relation(fields: [courseId], references: [id])
+  submitter     User       @relation("InternalMarksSubmitter", fields: [submittedBy], references: [id])
+
+  @@unique([departmentId, batchId, courseId, studentUsn])
+  @@map("internal_marks_submissions")
+}
+
+// Semester-end marks entered by Clerk, approved by COE
+model SemesterEndMarks {
+  id            Int         @id @default(autoincrement())
+  departmentId  Int         @map("department_id")
+  batchId       Int         @map("batch_id")
+  courseId      Int         @map("course_id")
+  studentUsn    String      @map("student_usn")
+  marks         Int         // Out of 50
+  enteredBy     Int         @map("entered_by") // Clerk ID
+  enteredAt     DateTime    @default(now()) @map("entered_at")
+  approvedBy    Int?        @map("approved_by") // COE ID
+  approvedAt    DateTime?   @map("approved_at")
+  status        MarksStatus @default(PENDING)
+
+  // Relations
+  department    Department @relation(fields: [departmentId], references: [id])
+  batch         Batch      @relation(fields: [batchId], references: [id])
+  course        Course     @relation(fields: [courseId], references: [id])
+  enteredByUser User       @relation("MarksEnteredBy", fields: [enteredBy], references: [id])
+  approvedByUser User?     @relation("MarksApprovedBy", fields: [approvedBy], references: [id])
+
+  @@unique([departmentId, batchId, courseId, studentUsn])
+  @@index([status])
+  @@index([departmentId, batchId, courseId])
+  @@index([studentUsn])
+  @@map("semester_end_marks")
+}
+
+// Final calculated result
+model Result {
+  id            Int          @id @default(autoincrement())
+  departmentId  Int          @map("department_id")
+  batchId       Int          @map("batch_id")
+  courseId      Int          @map("course_id")
+  studentUsn    String       @map("student_usn")
+  internalMarks Int          @map("internal_marks")
+  semesterMarks Int          @map("semester_marks")
+  totalMarks    Int          @map("total_marks")
+  status        ResultStatus
+  isPublished   Boolean      @default(false) @map("is_published")
+  publishedAt   DateTime?    @map("published_at")
+  finalizedBy   Int?         @map("finalized_by") // COE ID
+  finalizedAt   DateTime?    @map("finalized_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  department    Department   @relation(fields: [departmentId], references: [id])
+  batch         Batch        @relation(fields: [batchId], references: [id])
+  course        Course       @relation(fields: [courseId], references: [id])
+  finalizer     User?        @relation("ResultFinalizer", fields: [finalizedBy], references: [id])
+  revaluations  Revaluation[]
+
+  @@unique([departmentId, batchId, courseId, studentUsn])
+  @@index([isPublished])
+  @@index([studentUsn, isPublished])
+  @@map("results")
+}
+
+// Revaluation entries
+model Revaluation {
+  id            Int         @id @default(autoincrement())
+  resultId      Int         @map("result_id")
+  oldMarks      Int         @map("old_marks")
+  newMarks      Int         @map("new_marks")
+  enteredBy     Int         @map("entered_by") // Clerk
+  enteredAt     DateTime    @default(now()) @map("entered_at")
+  approvedBy    Int?        @map("approved_by") // COE
+  approvedAt    DateTime?   @map("approved_at")
+  status        MarksStatus @default(PENDING)
+
+  // Relations
+  result        Result      @relation(fields: [resultId], references: [id])
+  enteredByUser User        @relation("RevalEnteredBy", fields: [enteredBy], references: [id])
+  approvedByUser User?      @relation("RevalApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("revaluations")
+}
+
+// ============================================
+// DEPARTMENT ADMIN - INTERNAL ASSESSMENT
+// ============================================
+
+// Internal Assessment Configuration per course per semester
+model InternalAssessmentConfig {
+  id                    Int      @id @default(autoincrement())
+  courseId              Int      @map("course_id")
+  semesterNumber        Int      @map("semester_number")
+  
+  // Internal exams config
+  numInternals          Int      @default(3) @map("num_internals")          // How many IA exams (1-3)
+  maxMarksPerInternal   Int      @default(30) @map("max_marks_per_internal") // Max marks per IA
+  internalsToConsider   Int      @default(2) @map("internals_to_consider")   // Best of N (1-3)
+  internalWeightage     Int      @default(30) @map("internal_weightage")     // Scaled to this out of 50
+  
+  // Assignment config
+  hasAssignment         Boolean  @default(true) @map("has_assignment")
+  numAssignments        Int      @default(1) @map("num_assignments")
+  maxAssignmentMarks    Int      @default(20) @map("max_assignment_marks")
+  assignmentWeightage   Int      @default(20) @map("assignment_weightage")   // Out of 50
+  
+  // Lab config (for lab courses)
+  hasLab                Boolean  @default(false) @map("has_lab")
+  numLabExams           Int      @default(0) @map("num_lab_exams")
+  maxLabMarks           Int      @default(0) @map("max_lab_marks")
+  labWeightage          Int      @default(0) @map("lab_weightage")           // Out of 50
+  
+  totalMarks            Int      @default(50) @map("total_marks") // Must equal 50
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  course                Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([courseId, semesterNumber])
+  @@map("internal_assessment_configs")
+}
+
+// Detailed Internal Marks per student (breakdown before finalization)
+model InternalMarksDetail {
+  id              Int       @id @default(autoincrement())
+  studentUsn      String    @map("student_usn")
+  courseId        Int       @map("course_id")
+  batchId         Int       @map("batch_id")
+  sectionId       Int       @map("section_id")
+  internal1       Float?    @map("internal_1")
+  internal2       Float?    @map("internal_2")
+  internal3       Float?    @map("internal_3")
+  assignmentMarks Float?    @map("assignment_marks")
+  calculatedTotal Float?    @map("calculated_total") // Best-of-two + assignments
+  isFinalized     Boolean   @default(false) @map("is_finalized")
+  editReason      String?   @map("edit_reason")
+  updatedBy       Int?      @map("updated_by")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Mentor approval fields
+  mentorApprovalStatus   MentorApprovalStatus @default(DRAFT) @map("mentor_approval_status")
+  mentorApprovedBy       Int?                 @map("mentor_approved_by")
+  mentorApprovedAt       DateTime?            @map("mentor_approved_at")
+  mentorRejectionReason  String?              @map("mentor_rejection_reason")
+
+  // Relations
+  course          Course    @relation(fields: [courseId], references: [id])
+  batch           Batch     @relation(fields: [batchId], references: [id])
+  section         Section   @relation(fields: [sectionId], references: [id])
+  updater         User?     @relation("InternalMarksUpdater", fields: [updatedBy], references: [id])
+  mentorApprover  TeacherProfile? @relation("MentorApprovedMarks", fields: [mentorApprovedBy], references: [id])
+
+  @@unique([studentUsn, courseId, batchId])
+  @@index([sectionId])
+  @@index([batchId])
+  @@index([mentorApprovalStatus])
+  @@index([batchId, courseId])
+  @@index([sectionId, courseId])
+  @@index([studentUsn, batchId])
+  @@index([isFinalized])
+  @@index([studentUsn, courseId, batchId, isFinalized])
+  @@map("internal_marks_details")
+}
+
+// Course allocation to sections (for Department Admin)
+model CourseAllocation {
+  id              Int       @id @default(autoincrement())
+  courseId        Int       @map("course_id")
+  sectionId       Int       @map("section_id")
+  semesterNumber  Int       @map("semester_number")
+  teacherId       Int?      @map("teacher_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  course          Course         @relation(fields: [courseId], references: [id])
+  section         Section        @relation(fields: [sectionId], references: [id])
+  teacher         TeacherProfile? @relation(fields: [teacherId], references: [id])
+  timetableSlots  TimetableSlot[]
+
+  @@unique([courseId, sectionId, semesterNumber])
+  @@index([sectionId, semesterNumber])
+  @@index([teacherId])
+  @@index([courseId])
+  @@index([sectionId, courseId, teacherId])
+  @@map("course_allocations")
+}
+
+// ============================================
+// DEPARTMENT ADMIN - TIMETABLE
+// ============================================
+
+// Department-level time slot configuration (custom durations)
+model DepartmentTimeSlotConfig {
+  id              Int       @id @default(autoincrement())
+  departmentId    Int       @unique @map("department_id")
+  slotDuration    Int       @default(60) @map("slot_duration") // in minutes
+  dayStartTime    String    @default("09:00") @map("day_start_time")
+  dayEndTime      String    @default("17:00") @map("day_end_time")
+  breakSlots      Json?     @map("break_slots") // Array of break time ranges
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  department      Department @relation(fields: [departmentId], references: [id])
+
+  @@map("department_time_slot_configs")
+}
+
+// Timetable per section - now stores PDF/image file
+model SectionTimetable {
+  id              Int       @id @default(autoincrement())
+  sectionId       Int       @map("section_id")
+  semesterId      Int       @map("semester_id")
+  semesterNumber  Int       @map("semester_number")
+  fileUrl         String    @map("file_url") // URL to PDF/image
+  fileName        String    @map("file_name")
+  fileType        String    @map("file_type") // "pdf" | "image"
+  isActive        Boolean   @default(true) @map("is_active")
+  uploadedBy      Int       @map("uploaded_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  section         Section   @relation(fields: [sectionId], references: [id])
+  semester        Semester  @relation(fields: [semesterId], references: [id])
+  uploader        User      @relation("TimetableUploader", fields: [uploadedBy], references: [id])
+  @@unique([sectionId, semesterId])
+  @@map("section_timetables")
+}
+
+// ============================================
+// MENTORSHIP SYSTEM
+// ============================================
+
+enum MentorApprovalStatus {
+  DRAFT                       // Teacher is still entering/editing
+  SUBMITTED_BY_TEACHER        // Teacher submitted for mentor review
+  APPROVED_BY_MENTOR          // Mentor approved (final state for COE)
+  MENTOR_EDIT_PENDING_APPROVAL // Mentor made edits, awaiting teacher/admin approval
+  REJECTED_BY_MENTOR          // Mentor rejected, back to teacher
+}
+
+enum InteractionMode {
+  CALL
+  MEETING
+}
+
+enum InteractionPurpose {
+  ATTENDANCE
+  IA_MARKS
+  BEHAVIOR
+  OTHER
+}
+
+enum OverallAssessment {
+  SATISFACTORY
+  MODERATE
+  NEEDS_IMPROVEMENT
+}
+
+// Semester-based teacher-student mentor assignment
+model MentorAssignment {
+  id               Int       @id @default(autoincrement())
+  teacherProfileId Int       @map("teacher_profile_id")
+  studentProfileId Int       @map("student_profile_id")
+  departmentId     Int       @map("department_id")
+  batchId          Int       @map("batch_id")
+  sectionId        Int       @map("section_id")
+  academicYear     String    @map("academic_year")  // e.g., "2024-25"
+  semester         Int                               // 1-8
+  isActive         Boolean   @default(true) @map("is_active")
+  assignedAt       DateTime  @default(now()) @map("assigned_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+  assignedBy       Int       @map("assigned_by")
+  expiredAt        DateTime? @map("expired_at")
+
+  // Relations
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id])
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id])
+  department       Department     @relation(fields: [departmentId], references: [id])
+  batch            Batch          @relation(fields: [batchId], references: [id])
+  section          Section        @relation(fields: [sectionId], references: [id])
+  assignedByUser   User           @relation("MentorAssignedBy", fields: [assignedBy], references: [id])
+  
+  observations         MentorObservation[]
+  studentInteractions  MentorStudentInteraction[]
+  parentInteractions   MentorParentInteraction[]
+
+  @@unique([studentProfileId, academicYear, semester])  // One mentor per student per semester
+  @@index([teacherProfileId, isActive])
+  @@index([departmentId, batchId, sectionId])
+  @@index([studentProfileId, isActive])
+  @@map("mentor_assignments")
+}
+
+// Digital mentor card - semester-wise observations
+model MentorObservation {
+  id                       Int               @id @default(autoincrement())
+  mentorAssignmentId       Int               @map("mentor_assignment_id")
+  academicYear             String            @map("academic_year")
+  semester                 Int
+
+  personalityCommunication String?           @map("personality_communication")
+  curricularResponse       String?           @map("curricular_response")
+  coCurricularResponse     String?           @map("co_curricular_response")
+  extraCurricularResponse  String?           @map("extra_curricular_response")
+  overallAssessment        OverallAssessment @map("overall_assessment")
+  mentorRemarks            String?           @map("mentor_remarks")
+
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  mentorAssignment         MentorAssignment  @relation(fields: [mentorAssignmentId], references: [id])
+
+  @@unique([mentorAssignmentId, academicYear, semester])
+  @@map("mentor_observations")
+}
+
+// Student interaction/meeting log
+model MentorStudentInteraction {
+  id                 Int              @id @default(autoincrement())
+  mentorAssignmentId Int              @map("mentor_assignment_id")
+  meetingNumber      Int              @map("meeting_number")  // 1st, 2nd, 3rd, etc.
+
+  personalAspects    String?          @map("personal_aspects")
+  academicAspects    String?          @map("academic_aspects")
+  careerAspects      String?          @map("career_aspects")
+  otherAspects       String?          @map("other_aspects")
+
+  interactionDate    DateTime         @map("interaction_date")
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  mentorAssignment   MentorAssignment @relation(fields: [mentorAssignmentId], references: [id])
+
+  @@map("mentor_student_interactions")
+}
+
+// Parent interaction log
+model MentorParentInteraction {
+  id                 Int                @id @default(autoincrement())
+  mentorAssignmentId Int                @map("mentor_assignment_id")
+
+  interactionDate    DateTime           @map("interaction_date")
+  mode               InteractionMode
+  purpose            InteractionPurpose
+  summary            String
+  mentorSignature    Boolean            @default(false) @map("mentor_signature")
+  hodSignature       Boolean            @default(false) @map("hod_signature")
+
+  createdAt          DateTime           @default(now()) @map("created_at")
+
+  // Relations
+  mentorAssignment   MentorAssignment   @relation(fields: [mentorAssignmentId], references: [id])
+
+  @@map("mentor_parent_interactions")
+}
+
+// ============================================
+// ADMISSIONS SYSTEM
+// ============================================
+
+model AdmissionData {
+  id                  Int              @id @default(autoincrement())
+  admissionId         String           @unique @map("admission_id") // ADM000123
+  studentProfileId    Int?             @unique @map("student_profile_id")
+  status              AdmissionStatus  @default(DRAFT)
+  rejectionReason     String?          @map("rejection_reason")
+
+  // Page 1 – Personal & Admission Details
+  applyingThrough     String?          @map("applying_through") // CET/COMEDK/Management
+  applicantName       String           @map("applicant_name")
+  gender              String?
+  bloodGroup          String?          @map("blood_group")
+  dateOfBirth         DateTime?        @map("date_of_birth")
+  nationality         String?
+  religion            String?
+  category            String?
+  subCaste            String?          @map("sub_caste")
+  motherTongue        String?          @map("mother_tongue")
+  speciallyAbled      Boolean          @default(false) @map("specially_abled")
+  aadhaarNumber       String?          @map("aadhaar_number")
+  emailId             String?          @map("email_id")
+  mobileNumber        String?          @map("mobile_number")
+  hostel              Boolean          @default(false)
+  pickupPlace         String?          @map("pickup_place")
+
+  // Addresses (JSON)
+  permanentAddress    Json?            @map("permanent_address")  // { address, state, pin }
+  localAddress        Json?            @map("local_address")      // { address, state, pin }
+
+  // Parent Details (JSON)
+  fatherDetails       Json?            @map("father_details")     // { name, email, mobile, occupation, annualIncome }
+  motherDetails       Json?            @map("mother_details")     // { name, email, mobile, occupation, annualIncome }
+
+  // Course & Quota
+  branchSelection     String?          @map("branch_selection")
+  cetRollNo           String?          @map("cet_roll_no")
+  cetRank             String?          @map("cet_rank")
+  cetAllottedCategory String?          @map("cet_allotted_category")
+  comedkRollNo        String?          @map("comedk_roll_no")
+  comedkRank          String?          @map("comedk_rank")
+
+  // Page 2 – Education
+  sslcDetails         Json?            @map("sslc_details")       // { board, schoolName, registerNo, medium, marks, maxMarks, percentage, yearOfPassing }
+  pucDetails          Json?            @map("puc_details")        // { board, collegeName, registerNo, medium, marks, maxMarks, percentage, yearOfPassing }
+  subjectWiseMarks    Json?            @map("subject_wise_marks") // { physics, mathematics, chemistry, biologyOrOther }
+
+  // Certificates & Documents (JSON array of { type, url })
+  documents           Json?
+
+  // How did you know about college
+  howDidYouKnow       String?          @map("how_did_you_know")
+
+  // Declarations
+  applicantDeclaration Boolean         @default(false) @map("applicant_declaration")
+  parentDeclaration    Boolean         @default(false) @map("parent_declaration")
+
+  // Dynamic form data — stores ALL submitted field values as { fieldId: value }
+  formData            Json?            @map("form_data")
+
+  // Admission Year (determines batch)
+  admissionYear       Int?             @map("admission_year")
+
+  // Lateral Entry flag
+  isLateralEntry      Boolean          @default(false) @map("is_lateral_entry")
+
+  // Metadata
+  enteredBy           Int              @map("entered_by")
+  approvedBy          Int?             @map("approved_by")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  studentProfile      StudentProfile?  @relation(fields: [studentProfileId], references: [id])
+  enteredByUser       User             @relation("AdmissionEnteredBy", fields: [enteredBy], references: [id])
+  approvedByUser      User?            @relation("AdmissionApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("admission_data")
+}
+
+model USNRequest {
+  id                  Int              @id @default(autoincrement())
+  studentProfileId    Int              @map("student_profile_id")
+  requestedBy         Int              @map("requested_by")
+  permanentUsn        String?          @map("permanent_usn")
+  status              EditRequestStatus @default(PENDING)
+  reason              String?
+  reviewedBy          Int?             @map("reviewed_by")
+  reviewNote          String?          @map("review_note")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  reviewedAt          DateTime?        @map("reviewed_at")
+
+  // Relations
+  studentProfile      StudentProfile   @relation(fields: [studentProfileId], references: [id])
+  requester           User             @relation("USNRequester", fields: [requestedBy], references: [id])
+  reviewer            User?            @relation("USNReviewer", fields: [reviewedBy], references: [id])
+
+  @@map("usn_requests")
+}
+
+// Student Edit Request (Clerk proposes edits, Admin approves/rejects)
+model StudentEditRequest {
+  id                  Int              @id @default(autoincrement())
+  studentProfileId    Int              @map("student_profile_id")
+  requestedBy         Int              @map("requested_by")
+  status              String           @default("PENDING") // PENDING, APPROVED, REJECTED
+  proposedChanges     Json             @map("proposed_changes") // JSON of field changes
+  reason              String?
+  reviewedBy          Int?             @map("reviewed_by")
+  reviewNote          String?          @map("review_note")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  reviewedAt          DateTime?        @map("reviewed_at")
+
+  // Relations
+  studentProfile      StudentProfile   @relation(fields: [studentProfileId], references: [id])
+  requester           User             @relation("EditRequestRequester", fields: [requestedBy], references: [id])
+  reviewer            User?            @relation("EditRequestReviewer", fields: [reviewedBy], references: [id])
+
+  @@map("student_edit_requests")
+}
+
+// ============================================
+// SEMESTER MARKS UPLOAD SYSTEM
+// ============================================
+
+enum UploadStatus {
+  PENDING     // Uploaded by clerk, awaiting COE review
+  APPROVED    // Approved by COE, ready to post
+  POSTED      // Published by COE, visible to students
+  REJECTED    // Rejected by COE
+}
+
+// Main upload record tracking the entire marks upload
+model SemesterMarkUpload {
+  id                Int                     @id @default(autoincrement())
+  batchId           Int                     @map("batch_id")
+  departmentId      Int                     @map("department_id")
+  semesterNumber    Int                     @map("semester_number")
+  courseId          Int                     @map("course_id")
+  uploadedBy        Int                     @map("uploaded_by")
+  uploadedAt        DateTime                @default(now()) @map("uploaded_at")
+  fileName          String                  @map("file_name")
+  status            UploadStatus            @default(PENDING)
+  reviewedBy        Int?                    @map("reviewed_by")
+  reviewedAt        DateTime?               @map("reviewed_at")
+  reviewNotes       String?                 @map("review_notes")
+  postedBy          Int?                    @map("posted_by")
+  postedAt          DateTime?               @map("posted_at")
+  
+  // Relations
+  batch             Batch                   @relation(fields: [batchId], references: [id])
+  department        Department              @relation(fields: [departmentId], references: [id])
+  course            Course                  @relation(fields: [courseId], references: [id])
+  uploader          User                    @relation("UploadedMarks", fields: [uploadedBy], references: [id])
+  reviewer          User?                   @relation("ReviewedMarks", fields: [reviewedBy], references: [id])
+  poster            User?                   @relation("PostedMarks", fields: [postedBy], references: [id])
+  marks             SemesterMarkEntry[]
+  corrections       ParsingCorrection[]
+  
+  @@index([status])
+  @@index([batchId, departmentId, semesterNumber])
+  @@map("semester_mark_uploads")
+}
+
+// Individual mark entries for each student
+model SemesterMarkEntry {
+  id                Int                     @id @default(autoincrement())
+  uploadId          Int                     @map("upload_id")
+  studentUsn        String                  @map("student_usn")
+  studentId         Int                     @map("student_id")
+  courseId          Int                     @map("course_id")
+  externalMarksRaw  Float                   @map("external_marks_raw")   // Original marks from Excel (out of 100)
+  externalMarks     Float                   @map("external_marks")       // Converted marks (out of 50, rounded)
+  validationError   String?                 @map("validation_error")     // Any validation issues
+  
+  // Relations
+  upload            SemesterMarkUpload      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  student           User                    @relation("StudentMarksEntries", fields: [studentId], references: [id])
+  course            Course                  @relation(fields: [courseId], references: [id])
+  
+  @@unique([uploadId, studentUsn, courseId])
+  @@index([studentUsn])
+  @@map("semester_mark_entries")
+}
+
+// Track manual corrections to improve auto-detection (self-learning system)
+model ParsingCorrection {
+  id              Int                     @id @default(autoincrement())
+  uploadId        Int                     @map("upload_id")
+  correctedBy     Int                     @map("corrected_by")
+  correctedAt     DateTime                @default(now()) @map("corrected_at")
+  fieldType       String                  @map("field_type")       // "USN_COLUMN", "MARKS_COLUMN", "COURSE_DETECTION"
+  originalValue   String                  @map("original_value")   // What system detected
+  correctedValue  String                  @map("corrected_value")  // What user corrected to
+  excelPattern    String                  @map("excel_pattern")    // Pattern in Excel that caused confusion
+  
+  // Relations
+  upload          SemesterMarkUpload      @relation(fields: [uploadId], references: [id])
+  corrector       User                    @relation("ParsingCorrector", fields: [correctedBy], references: [id])
+  
+  @@index([fieldType])
+  @@map("parsing_corrections")
+}
+
+// ============================================
+// FIRST YEAR COORDINATOR - CYCLE ALLOCATION
+// ============================================
+
+// Tracks department-wide cycle allocations for first year students
+model CycleDepartmentAllocation {
+  id                    Int       @id @default(autoincrement())
+  batchId               Int       @map("batch_id")
+  optedDepartmentId     Int       @map("opted_department_id")      // The department student enrolled in (CSE, ECE, etc.)
+  semester1CycleId      Int       @map("semester1_cycle_id")       // Physics or Chemistry for Sem 1
+  allocatedBy           Int       @map("allocated_by")
+  allocatedAt           DateTime  @default(now()) @map("allocated_at")
+  isLocked              Boolean   @default(true) @map("is_locked")
+  
+  // Relations
+  batch                 Batch      @relation(fields: [batchId], references: [id])
+  optedDepartment       Department @relation("AllocatedOptedDept", fields: [optedDepartmentId], references: [id])
+  semester1Cycle        Department @relation("AllocatedCycleDept", fields: [semester1CycleId], references: [id])
+  allocatedByUser       User       @relation("CycleAllocator", fields: [allocatedBy], references: [id])
+  
+  @@unique([batchId, optedDepartmentId])
+  @@map("cycle_department_allocations")
+}
+
+// ============================================
+// ADMISSION FORM CONFIGURATION
+// ============================================
+
+model AdmissionFormConfig {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int      @unique @map("tenant_id")
+  collegeName     String   @map("college_name")
+  collegeAddress  String   @default("") @map("college_address")
+  logoUrl         String?  @map("logo_url")        // Watermark logo (legacy file path)
+  logoData        String?  @map("logo_data") @db.Text  // Base64 data URI for form logo
+  primaryColor    String   @default("#6366f1") @map("primary_color")
+  secondaryColor  String   @default("#4f46e5") @map("secondary_color")
+  bgColor         String   @default("#f8fafc") @map("bg_color")
+  formTitle       String   @default("Application Form") @map("form_title")
+  formFields      Json     @default("[]") @map("form_fields")  // Array of field configs
+  isPublished     Boolean  @default(true) @map("is_published")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("admission_form_configs")
+}
+
+// ============================================
+// PARENT PROFILES & CHAT SYSTEM
+// ============================================
+
+model ParentProfile {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @unique @map("user_id")
+  studentProfileId Int       @unique @map("student_profile_id")
+  relationship     String    @default("FATHER") // FATHER, MOTHER, GUARDIAN
+  phoneNumber      String?   @map("phone_number")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentProfile   StudentProfile   @relation(fields: [studentProfileId], references: [id])
+
+  @@index([studentProfileId])
+  @@map("parent_profiles")
+}
+
+model ChatConversation {
+  id                Int         @id @default(autoincrement())
+  tenantId          Int         @map("tenant_id")
+  parentUserId      Int         @map("parent_user_id")
+  mentorUserId      Int         @map("mentor_user_id")
+  studentProfileId  Int         @map("student_profile_id")
+
+  // Escalation
+  isEscalated       Boolean     @default(false) @map("is_escalated")
+  escalatedAt       DateTime?   @map("escalated_at")
+  escalatedToId     Int?        @map("escalated_to_id")
+
+  lastMessageAt     DateTime?   @map("last_message_at")
+  lastMentorReplyAt DateTime?   @map("last_mentor_reply_at")
+
+  status            ChatStatus  @default(ACTIVE)
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  tenant            Tenant           @relation(fields: [tenantId], references: [id])
+  parentUser        User             @relation("ChatParent", fields: [parentUserId], references: [id])
+  mentorUser        User             @relation("ChatMentor", fields: [mentorUserId], references: [id])
+  studentProfile    StudentProfile   @relation(fields: [studentProfileId], references: [id])
+  escalatedTo       User?            @relation("ChatEscalatedTo", fields: [escalatedToId], references: [id])
+  messages          ChatMessage[]
+
+  @@unique([parentUserId, mentorUserId, studentProfileId])
+  @@index([tenantId])
+  @@index([mentorUserId, status])
+  @@index([parentUserId, status])
+  @@index([escalatedToId, isEscalated])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id              Int       @id @default(autoincrement())
+  conversationId  Int       @map("conversation_id")
+  senderUserId    Int       @map("sender_user_id")
+  content         String
+  isRead          Boolean   @default(false) @map("is_read")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User             @relation("ChatMessageSender", fields: [senderUserId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@index([conversationId, isRead, senderUserId])
+  @@map("chat_messages")
+}
+
+// ============================================
+// SECURITY — PASSWORD RESET
+// ============================================
+
+// Secure password reset tokens (emailed to user)
+model PasswordResetToken {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  tokenHash   String    @unique @map("token_hash") // SHA-256 hash of the token (never store raw)
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")            // Null = unused, set on use
+  ipAddress   String?   @map("ip_address")         // IP that requested the reset
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// Secure password reset OTPs (emailed to user)
+model PasswordResetOtp {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  otpHash     String    @unique @map("otp_hash") // SHA-256 hash of the 6-digit OTP
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")            // Null = unused, set on use
+  attempts    Int       @default(0)                // Tracks failed attempts (lockout at 3)
+  ipAddress   String?   @map("ip_address")         // IP that requested the reset
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
+  @@map("password_reset_otps")
+}
+
+// ============================================
+// TIMETABLE GENERATOR
+// ============================================
+
+// Physical classrooms / labs
+model Classroom {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int       @map("tenant_id")
+  name         String    // "Room 101", "CS Lab 3"
+  building     String?   // "Main Block", "CS Block"
+  capacity     Int       @default(60)
+  type         String    @default("LECTURE") // LECTURE | LAB | SEMINAR
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  slots        TimetableSlot[]
+
+  @@unique([tenantId, name])
+  @@map("classrooms")
+}
+
+// HOD's per-section timetable generation settings
+model TimetableConfig {
+  id                    Int       @id @default(autoincrement())
+  sectionId             Int       @map("section_id")
+  semesterId            Int       @map("semester_id")
+  maxPeriodsPerDay      Int       @default(6) @map("max_periods_per_day")
+  teacherMaxPerDay      Json?     @map("teacher_max_per_day") // { "1": 4, "2": 3, ... } per dayOfWeek
+  courseWeeklyClasses    Json      @map("course_weekly_classes") // { "courseId": classesPerWeek }
+  courseIsLab           Json?     @map("course_is_lab") // { "courseId": true/false }
+  labBlockSize          Int       @default(2) @map("lab_block_size") // consecutive periods for lab
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  section               Section   @relation(fields: [sectionId], references: [id])
+  semester              Semester  @relation(fields: [semesterId], references: [id])
+
+  @@unique([sectionId, semesterId])
+  @@map("timetable_configs")
+}
+
+// One period in the weekly timetable grid
+model TimetableSlot {
+  id                  Int       @id @default(autoincrement())
+  tenantId            Int       @map("tenant_id")
+  sectionId           Int       @map("section_id")
+  semesterId          Int       @map("semester_id")
+  dayOfWeek           Int       @map("day_of_week") // 1=Mon, 2=Tue, ..., 5=Fri
+  periodNumber        Int       @map("period_number") // 1, 2, 3...
+  startTime           String    @map("start_time") // "09:00"
+  endTime             String    @map("end_time")   // "10:00"
+  courseAllocationId   Int?      @map("course_allocation_id")
+  classroomId         Int?      @map("classroom_id")
+  isBreak             Boolean   @default(false) @map("is_break")
+  breakLabel          String?   @map("break_label") // "Lunch", "Tea Break"
+  isLab               Boolean   @default(false) @map("is_lab")
+  labBlockSize        Int       @default(1) @map("lab_block_size") // 2 or 3 for labs
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant              Tenant            @relation(fields: [tenantId], references: [id])
+  section             Section           @relation(fields: [sectionId], references: [id])
+  semester            Semester          @relation(fields: [semesterId], references: [id])
+  courseAllocation     CourseAllocation? @relation(fields: [courseAllocationId], references: [id])
+  classroom           Classroom?        @relation(fields: [classroomId], references: [id])
+  substitutions       TeacherSubstitution[]
+
+  @@unique([sectionId, semesterId, dayOfWeek, periodNumber])
+  @@index([sectionId, semesterId])
+  @@index([classroomId, dayOfWeek, periodNumber])
+  @@map("timetable_slots")
+}
+
+// Substitute teacher assignment — substitute teaches THEIR OWN course
+model TeacherSubstitution {
+  id                    Int       @id @default(autoincrement())
+  timetableSlotId       Int       @map("timetable_slot_id")
+  date                  DateTime  // Specific date of substitution
+  originalTeacherId     Int       @map("original_teacher_id")
+  substituteTeacherId   Int       @map("substitute_teacher_id")
+  substituteCourseId    Int?      @map("substitute_course_id") // Course the substitute ACTUALLY teaches
+  reason                String?   // "Sick leave", "Conference"
+  assignedBy            Int       @map("assigned_by") // HOD userId
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  timetableSlot         TimetableSlot  @relation(fields: [timetableSlotId], references: [id])
+  originalTeacher       TeacherProfile @relation("OriginalTeacher", fields: [originalTeacherId], references: [id])
+  substituteTeacher     TeacherProfile @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id])
+  substituteCourse      Course?        @relation("SubstituteCourse", fields: [substituteCourseId], references: [id])
+  assigner              User           @relation("SubstitutionAssigner", fields: [assignedBy], references: [id])
+
+  @@unique([timetableSlotId, date])
+  @@index([date])
+  @@index([substituteTeacherId, date])
+  @@map("teacher_substitutions")
+}
+
+// Holiday / Working Saturday / Class-on-Holiday management
+model AcademicCalendarDay {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int       @map("tenant_id")
+  departmentId  Int?      @map("department_id") // null = all departments
+  date          DateTime  // The specific date
+  type          String    // HOLIDAY | WORKING_SATURDAY | CLASS_ON_HOLIDAY
+  label         String?   // "Independence Day", "Extra class day"
+  overrideDay   Int?      @map("override_day") // Which day's timetable to follow (1=Mon..5=Fri)
+  declaredBy    Int       @map("declared_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id])
+  department    Department? @relation(fields: [departmentId], references: [id])
+  declarer      User       @relation("CalendarDeclarer", fields: [declaredBy], references: [id])
+
+  @@unique([tenantId, date, departmentId])
+  @@index([tenantId, date])
+  @@map("academic_calendar_days")
+}
+
+// ============================================
+// NO-DUE MODULE (Phase 2)
+// ============================================
+
+enum NodueClearanceStage {
+  STUDENT_APPLICATION
+  FACULTY_REVIEW
+  LIBRARY_REVIEW
+  DEPARTMENT_REVIEW
+  HOD_REVIEW
+  PRINCIPAL_REVIEW
+  CLEARED
+  REJECTED
+}
+
+enum NodueDueStatus {
+  PENDING
+  COMPLETED
+  WAIVED
+}
+
+enum NoduePaymentStatus {
+  CREATED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NodueDueType {
+  ATTENDANCE_FINE
+  COLLEGE_FEE
+  LIBRARY_FINE
+  MISCELLANEOUS
+}
+
+// Subject enrolled for clearance (faculty marks attendance %)
+model NodueSubjectEnrollment {
+  id                    Int       @id @default(autoincrement())
+  tenantId              Int       @map("tenant_id")
+  studentId             Int       @map("student_id")
+  subjectId             Int       @map("subject_id")
+  teacherId             Int?      @map("teacher_id")
+  semesterId            Int?      @map("semester_id")
+  attendancePct         Decimal?  @map("attendance_pct") @db.Decimal(5,2)
+  attendanceFee         Decimal   @default(0) @map("attendance_fee") @db.Decimal(10,2)
+  attendanceFeeVerified Boolean   @default(false) @map("attendance_fee_verified")
+  isFacultyCleared      Boolean   @default(false) @map("is_faculty_cleared")
+  status                NodueDueStatus @default(PENDING)
+  fineCategory          String?   @map("fine_category")
+  remarks               String?
+  paymentDate           DateTime? @map("payment_date")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  student    User       @relation("NodueStudent", fields: [studentId], references: [id])
+  teacher    User?      @relation("NodueTeacher", fields: [teacherId], references: [id])
+  subject    Subject    @relation(fields: [subjectId], references: [id])
+  paymentOrders NoduePaymentOrder[]
+
+  @@unique([tenantId, studentId, subjectId])
+  @@index([tenantId, studentId])
+  @@index([tenantId, teacherId])
+  @@map("nodue_subject_enrollments")
+}
+
+// Master clearance request (tracks overall pipeline stage)
+model NodueClearanceRequest {
+  id            Int                   @id @default(autoincrement())
+  tenantId      Int                   @map("tenant_id")
+  studentId     Int                   @map("student_id")
+  currentStage  NodueClearanceStage   @default(STUDENT_APPLICATION) @map("current_stage")
+  status        NodueDueStatus        @default(PENDING)
+  remarks       String?
+  templateId    Int?                  @map("template_id")
+  certificateUrl String?             @map("certificate_url")
+  clearedAt     DateTime?            @map("cleared_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at")
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  student    User      @relation("NodueClearanceStudent", fields: [studentId], references: [id])
+  template   NodueClearanceTemplate? @relation(fields: [templateId], references: [id])
+
+  @@unique([tenantId, studentId])
+  @@index([tenantId, currentStage])
+  @@map("nodue_clearance_requests")
+}
+
+// Student college dues (accounts manages)
+model NodueStudentDue {
+  id          Int             @id @default(autoincrement())
+  tenantId    Int             @map("tenant_id")
+  studentId   Int             @map("student_id")
+  dueType     String          @default("college_fee") @map("due_type")
+  description String?
+  fineAmount  Decimal         @default(0) @map("fine_amount") @db.Decimal(10,2)
+  paidAmount  Decimal         @default(0) @map("paid_amount") @db.Decimal(10,2)
+  hasDues     Boolean         @default(false) @map("has_dues")
+  status      NodueDueStatus  @default(PENDING)
+  remarks     String?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  student  User   @relation("NodueStudentDues", fields: [studentId], references: [id])
+
+  @@index([tenantId, studentId])
+  @@map("nodue_student_dues")
+}
+
+// Library dues
+model NodueLibraryDue {
+  id         Int             @id @default(autoincrement())
+  tenantId   Int             @map("tenant_id")
+  studentId  Int             @map("student_id")
+  hasDues    Boolean         @default(false) @map("has_dues")
+  fineAmount Decimal         @default(0) @map("fine_amount") @db.Decimal(10,2)
+  paidAmount Decimal         @default(0) @map("paid_amount") @db.Decimal(10,2)
+  status     NodueDueStatus  @default(PENDING)
+  remarks    String?
+  permittedUntil DateTime?   @map("permitted_until")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  student  User   @relation("NodueLibraryDues", fields: [studentId], references: [id])
+
+  @@unique([tenantId, studentId])
+  @@map("nodue_library_dues")
+}
+
+// Attendance fine slab configuration
+model NodueAttendanceCategory {
+  id             Int      @id @default(autoincrement())
+  tenantId       Int      @map("tenant_id")
+  departmentId   Int?     @map("department_id")
+  categoryName   String   @map("category_name")
+  minPct         Decimal  @map("min_pct") @db.Decimal(5,2)
+  maxPct         Decimal  @map("max_pct") @db.Decimal(5,2)
+  fineAmount     Decimal  @map("fine_amount") @db.Decimal(10,2)
+  isFirstYear    Boolean  @default(false) @map("is_first_year")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([tenantId])
+  @@map("nodue_attendance_categories")
+}
+
+// Fine approval by FYC/HOD
+model NodueFineApproval {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int      @map("tenant_id")
+  enrollmentId Int      @map("enrollment_id")
+  approvedBy   Int      @map("approved_by")
+  originalFine Decimal  @map("original_fine") @db.Decimal(10,2)
+  approvedFine Decimal  @map("approved_fine") @db.Decimal(10,2)
+  remarks      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  approver   User   @relation("NodueFineApprover", fields: [approvedBy], references: [id])
+
+  @@map("nodue_fine_approvals")
+}
+
+// HDFC payment orders
+model NoduePaymentOrder {
+  id               Int                 @id @default(autoincrement())
+  tenantId         Int                 @map("tenant_id")
+  studentId        Int                 @map("student_id")
+  enrollmentId     Int?                @map("enrollment_id")
+  gatewayOrderId   String              @unique @map("gateway_order_id")
+  gatewayPaymentId String?             @map("gateway_payment_id")
+  gatewayType      String              @default("hdfc") @map("gateway_type")
+  dueType          NodueDueType        @default(ATTENDANCE_FINE) @map("due_type")
+  amount           Decimal             @map("amount") @db.Decimal(10,2)
+  amountPaid       Decimal?            @map("amount_paid") @db.Decimal(10,2)
+  status           NoduePaymentStatus  @default(CREATED)
+  paymentLink      String?             @map("payment_link")
+  paidAt           DateTime?           @map("paid_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at")
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id])
+  student    User    @relation("NoduePaymentStudent", fields: [studentId], references: [id])
+  enrollment NodueSubjectEnrollment? @relation(fields: [enrollmentId], references: [id])
+
+  @@index([tenantId, studentId])
+  @@index([status])
+  @@map("nodue_payment_orders")
+}
+
+// Certificate templates
+model NodueClearanceTemplate {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int      @map("tenant_id")
+  name         String
+  headerHtml   String?  @map("header_html") @db.Text
+  bodyHtml     String?  @map("body_html") @db.Text
+  footerHtml   String?  @map("footer_html") @db.Text
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  requests NodueClearanceRequest[]
+
+  @@map("nodue_clearance_templates")
+}
+
+// AICTE activity compliance
+model NodueAicteActivity {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int      @map("tenant_id")
+  studentId    Int      @map("student_id")
+  activityName String   @map("activity_name")
+  category     String?
+  status       NodueDueStatus @default(PENDING)
+  proof        String?
+  verifiedBy   Int?     @map("verified_by")
+  remarks      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  student  User   @relation("NodueAicteStudent", fields: [studentId], references: [id])
+  verifier User?  @relation("NodueAicteVerifier", fields: [verifiedBy], references: [id])
+
+  @@index([tenantId, studentId])
+  @@map("nodue_aicte_activities")
+}
+
+// No-Due activity logs
+model NodueActivityLog {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int      @map("tenant_id")
+  userId     Int      @map("user_id")
+  userRole   String   @map("user_role")
+  action     String
+  details    String?  @db.Text
+  targetId   Int?     @map("target_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation("NodueLogUser", fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@map("nodue_activity_logs")
+}
+
+// ============================================
+// PLACEPRO MODULE (Phase 3)
+// ============================================
+
+enum PlacementDriveStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PlacementApplicationStatus {
+  APPLIED
+  SHORTLISTED
+  SELECTED
+  REJECTED
+  WITHDRAWN
+  ON_HOLD
+}
+
+enum PlacementRoundType {
+  APTITUDE
+  GROUP_DISCUSSION
+  TECHNICAL
+  HR
+  CODING
+  PRESENTATION
+  OTHER
+}
+
+enum PlacementJobType {
+  FULL_TIME
+  INTERNSHIP
+  CONTRACT
+}
+
+// Company registration and profile
+model PlacementCompany {
+  id              Int       @id @default(autoincrement())
+  tenantId        Int       @map("tenant_id")
+  userId          Int?      @unique @map("user_id")         // Linked user account (PLACEMENT_COMPANY role)
+  name            String
+  email           String
+  phone           String?
+  website         String?
+  industry        String?
+  description     String?   @db.Text
+  logoUrl         String?   @map("logo_url")
+  address         String?
+  isVerified      Boolean   @default(false) @map("is_verified")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  user    User?  @relation("PlacementCompanyUser", fields: [userId], references: [id])
+  jobs    PlacementJob[]
+  drives  PlacementDrive[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("placement_companies")
+}
+
+// Job/Internship postings by companies
+model PlacementJob {
+  id              Int              @id @default(autoincrement())
+  tenantId        Int              @map("tenant_id")
+  companyId       Int              @map("company_id")
+  title           String
+  description     String?          @db.Text
+  jobType         PlacementJobType @default(FULL_TIME) @map("job_type")
+  location        String?
+  salary          String?
+  stipend         String?
+  minCgpa         Decimal?         @map("min_cgpa") @db.Decimal(4,2)
+  maxBacklogs     Int?             @map("max_backlogs")
+  eligibleDepts   String[]         @map("eligible_depts")   // Department codes
+  eligibleBatches String[]         @map("eligible_batches")  // Batch years
+  skills          String[]
+  deadline        DateTime?
+  isApproved      Boolean          @default(false) @map("is_approved")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  company      PlacementCompany   @relation(fields: [companyId], references: [id])
+  applications PlacementApplication[]
+  drive        PlacementDrive?    @relation
+
+  @@index([tenantId, companyId])
+  @@index([tenantId, isApproved, isActive])
+  @@map("placement_jobs")
+}
+
+// Placement drives (multi-round hiring events)
+model PlacementDrive {
+  id           Int                   @id @default(autoincrement())
+  tenantId     Int                   @map("tenant_id")
+  companyId    Int                   @map("company_id")
+  jobId        Int?                  @unique @map("job_id")
+  title        String
+  description  String?               @db.Text
+  driveDate    DateTime?             @map("drive_date")
+  venue        String?
+  status       PlacementDriveStatus  @default(DRAFT)
+  createdBy    Int                   @map("created_by")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @default(now()) @updatedAt @map("updated_at")
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id])
+  company   PlacementCompany @relation(fields: [companyId], references: [id])
+  job       PlacementJob?    @relation(fields: [jobId], references: [id])
+  creator   User             @relation("PlacementDriveCreator", fields: [createdBy], references: [id])
+  rounds    PlacementRound[]
+  feedback  PlacementFeedback[]
+
+  @@index([tenantId, status])
+  @@map("placement_drives")
+}
+
+// Drive rounds (aptitude, GD, technical, HR)
+model PlacementRound {
+  id         Int                @id @default(autoincrement())
+  driveId    Int                @map("drive_id")
+  roundNo    Int                @map("round_no")
+  roundType  PlacementRoundType @map("round_type")
+  name       String?
+  venue      String?
+  startTime  DateTime?          @map("start_time")
+  endTime    DateTime?          @map("end_time")
+  notes      String?            @db.Text
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  drive  PlacementDrive @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  slots  PlacementInterviewSlot[]
+
+  @@unique([driveId, roundNo])
+  @@map("placement_rounds")
+}
+
+// Student applications to jobs
+model PlacementApplication {
+  id          Int                         @id @default(autoincrement())
+  tenantId    Int                         @map("tenant_id")
+  studentId   Int                         @map("student_id")
+  jobId       Int                         @map("job_id")
+  cvId        Int?                        @map("cv_id")
+  status      PlacementApplicationStatus  @default(APPLIED)
+  currentRound Int?                       @map("current_round")
+  remarks     String?
+  appliedAt   DateTime                    @default(now()) @map("applied_at")
+  updatedAt   DateTime                    @default(now()) @updatedAt @map("updated_at")
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id])
+  student User             @relation("PlacementApplicant", fields: [studentId], references: [id])
+  job     PlacementJob     @relation(fields: [jobId], references: [id])
+  cv      PlacementCv?     @relation(fields: [cvId], references: [id])
+  offer   PlacementOfferLetter?
+  slots   PlacementInterviewSlot[]
+
+  @@unique([tenantId, studentId, jobId])
+  @@index([tenantId, studentId])
+  @@map("placement_applications")
+}
+
+// Student placement profile
+model PlacementStudentProfile {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int       @map("tenant_id")
+  userId        Int       @unique @map("user_id")
+  cgpa          Decimal?  @db.Decimal(4,2)
+  tenthPct      Decimal?  @map("tenth_pct") @db.Decimal(5,2)
+  twelfthPct    Decimal?  @map("twelfth_pct") @db.Decimal(5,2)
+  backlogs      Int       @default(0)
+  activeBacklogs Int      @default(0) @map("active_backlogs")
+  skills        String[]
+  linkedinUrl   String?   @map("linkedin_url")
+  githubUrl     String?   @map("github_url")
+  portfolioUrl  String?   @map("portfolio_url")
+  isPlaced      Boolean   @default(false) @map("is_placed")
+  isOptedOut    Boolean   @default(false) @map("is_opted_out")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation("PlacementProfile", fields: [userId], references: [id])
+  cvs    PlacementCv[]
+  declaration PlacementDeclaration?
+
+  @@unique([tenantId, userId])
+  @@map("placement_student_profiles")
+}
+
+// Multi-version CV uploads
+model PlacementCv {
+  id          Int      @id @default(autoincrement())
+  profileId   Int      @map("profile_id")
+  fileName    String   @map("file_name")
+  fileUrl     String   @map("file_url")
+  version     Int      @default(1)
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  profile      PlacementStudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  applications PlacementApplication[]
+
+  @@map("placement_cvs")
+}
+
+// Interview scheduling
+model PlacementInterviewSlot {
+  id            Int       @id @default(autoincrement())
+  roundId       Int       @map("round_id")
+  applicationId Int       @map("application_id")
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime  @map("end_time")
+  venue         String?
+  meetingLink   String?   @map("meeting_link")
+  result        String?
+  feedback      String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  round       PlacementRound       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  application PlacementApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("placement_interview_slots")
+}
+
+// Offer letter tracking
+model PlacementOfferLetter {
+  id            Int       @id @default(autoincrement())
+  applicationId Int       @unique @map("application_id")
+  offerDate     DateTime  @map("offer_date")
+  ctcOffered    String?   @map("ctc_offered")
+  position      String?
+  location      String?
+  joiningDate   DateTime? @map("joining_date")
+  documentUrl   String?   @map("document_url")
+  isAccepted    Boolean?  @map("is_accepted")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  application PlacementApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("placement_offer_letters")
+}
+
+// Pre-placement assessments
+model PlacementAssessment {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int       @map("tenant_id")
+  title        String
+  description  String?   @db.Text
+  assessmentType String  @default("aptitude") @map("assessment_type")
+  totalMarks   Int?      @map("total_marks")
+  duration     Int?                             // in minutes
+  scheduledAt  DateTime? @map("scheduled_at")
+  externalLink String?   @map("external_link")
+  createdBy    Int       @map("created_by")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  creator  User   @relation("PlacementAssessmentCreator", fields: [createdBy], references: [id])
+
+  @@index([tenantId])
+  @@map("placement_assessments")
+}
+
+// Student placement declaration
+model PlacementDeclaration {
+  id         Int       @id @default(autoincrement())
+  profileId  Int       @unique @map("profile_id")
+  declarationType String @default("available") @map("declaration_type")
+  reason     String?
+  companyName String?  @map("company_name")
+  ctc        String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  profile PlacementStudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("placement_declarations")
+}
+
+// Drive feedback from students
+model PlacementFeedback {
+  id        Int      @id @default(autoincrement())
+  driveId   Int      @map("drive_id")
+  userId    Int      @map("user_id")
+  rating    Int                        // 1-5
+  comments  String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  drive PlacementDrive @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  user  User           @relation("PlacementFeedbackUser", fields: [userId], references: [id])
+
+  @@unique([driveId, userId])
+  @@map("placement_feedback")
+}

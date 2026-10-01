@@ -1,0 +1,65 @@
+# =============================================================================
+# Server Dockerfile — Multi-stage build for Express + Prisma 7
+# =============================================================================
+
+# --- Stage 1: Build ---
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Copy workspace root files
+COPY package.json package-lock.json ./
+COPY server/package.json ./server/
+COPY client/package.json ./client/
+
+# Install all deps (--ignore-scripts: skip postinstall prisma generate before source exists)
+RUN npm ci --ignore-scripts
+
+# Copy server source
+COPY server/ ./server/
+COPY tsconfig.json ./
+
+# Generate Prisma client (ESM-compatible, needs schema + config)
+RUN cd server && npx prisma generate
+
+# Build TypeScript
+RUN cd server && npm run build
+
+# --- Stage 2: Production runtime ---
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+# Add non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001 -G appgroup
+
+# Copy node_modules from build stage (includes generated Prisma client with ESM support)
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/server/node_modules ./server/node_modules
+
+# Copy built output
+COPY --from=build /app/server/dist ./server/dist
+
+# Copy package files and prisma schema (needed at runtime for migrations)
+COPY package.json ./
+COPY server/package.json ./server/
+COPY server/prisma ./server/prisma
+# Prisma 7: config file needed for migrate deploy (defines datasource URL)
+COPY server/prisma.config.ts ./server/prisma.config.ts
+
+# Create uploads directory
+RUN mkdir -p /app/server/uploads && chown -R appuser:appgroup /app
+
+USER appuser
+
+WORKDIR /app/server
+
+ENV NODE_ENV=production
+EXPOSE 8080
+
+# Health check for container orchestration (PORT is set by Railway)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/api/health || exit 1
+
+# Use 'db push' to sync schema to database (safe: creates missing tables, no data loss)
+# Once stable, consider switching to 'prisma migrate deploy' with a proper baseline
+CMD ["sh", "-c", "npx prisma db push --config prisma.config.ts && node dist/src/index.js"]

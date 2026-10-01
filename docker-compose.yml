@@ -1,0 +1,153 @@
+# =============================================================================
+# Docker Compose — Full Stack Local Development & Production
+# =============================================================================
+# Usage:
+#   Development: docker compose up
+#   Production:  docker compose --profile production up
+# =============================================================================
+
+services:
+  # ─── PostgreSQL ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: academic_ops
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── PgBouncer (Connection Pooler) ─────────────────────────────
+  # Industry-standard connection pooler (used by Stripe, GitLab, Supabase)
+  # Multiplexes app connections into fewer DB connections via transaction pooling
+  pgbouncer:
+    image: edoburu/pgbouncer:1.23.1-p2
+    restart: unless-stopped
+    ports:
+      - "6432:6432"
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer-userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "6432" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Express Server ────────────────────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      # Connect through PgBouncer (port 6432) instead of direct Postgres (5432)
+      # pgbouncer=true tells Prisma to use PgBouncer-compatible mode
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@pgbouncer:6432/academic_ops?schema=public&pgbouncer=true
+      # Direct connection for migrations (bypasses PgBouncer — required for DDL)
+      DIRECT_DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@postgres:5432/academic_ops?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PORT: "4001"
+      NODE_ENV: production
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3001}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - uploads_data:/app/server/uploads
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4001/api/health" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ─── Next.js Client ────────────────────────────────────────────
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4001/api}
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4001/api}
+    depends_on:
+      - server
+
+  # ─── Database Backup (Daily) ───────────────────────────────────
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - db_backups:/backups
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-postgres}
+    entrypoint: /bin/sh
+    command: >
+      -c "while true; do
+        TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
+        echo \"[$(date)] Starting backup...\";
+        pg_dump -h postgres -U postgres academic_ops | gzip > /backups/backup-$${TIMESTAMP}.sql.gz;
+        if [ $$? -eq 0 ]; then
+          echo \"[$(date)] Backup complete: backup-$${TIMESTAMP}.sql.gz\";
+          echo \"[$(date)] Verifying backup integrity...\";
+          gunzip -t /backups/backup-$${TIMESTAMP}.sql.gz && echo \"[$(date)] Backup verified OK\" || echo \"[$(date)] WARNING: Backup may be corrupt\";
+        else
+          echo \"[$(date)] ERROR: Backup failed!\";
+        fi;
+        find /backups -name '*.sql.gz' -mtime +7 -delete;
+        echo \"[$(date)] Cleaned backups older than 7 days. Sleeping 24h...\";
+        sleep 86400;
+      done"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  db_backups:
+
+

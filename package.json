@@ -1,0 +1,33 @@
+{
+    "name": "academic-ops-platform",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Engineering College Academic Operations Platform - Governance-First",
+    "workspaces": [
+        "client",
+        "server"
+    ],
+    "scripts": {
+        "preinstall": "node -e \"if(!require('fs').existsSync('client')){console.error('\\x1b[31m❌ Run npm install from the project ROOT, not from server/ or client/\\x1b[0m');process.exit(1)}\"",
+        "postinstall": "if [ -z \"$VERCEL\" ] && [ -z \"$NETLIFY\" ]; then cd server && npx prisma generate; fi",
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "dev:client": "npm run dev --workspace=client",
+        "dev:server": "npm run dev --workspace=server",
+        "build": "npm run build --workspace=client && npm run build --workspace=server",
+        "lint": "npm run lint --workspaces --if-present",
+        "test": "npm run test --workspaces --if-present",
+        "clean": "rm -rf node_modules client/.next server/dist && echo '✅ Cleaned. Run npm install to reinstall.'"
+    },
+    "devDependencies": {
+        "@types/pg": "8.20.0",
+        "concurrently": "^9.2.1"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "overrides": {
+        "hono": "4.12.7",
+        "@hono/node-server": "1.19.11",
+        "lodash": "4.17.23"
+    }
+}

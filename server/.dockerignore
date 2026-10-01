@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.env.local
+.env.production
+.env.*.local
+uploads
+*.log
+.git
+.gitignore
+.DS_Store
+Thumbs.db
+README.md
+vitest.config.ts
+src/**/*.test.ts
+src/__tests__
