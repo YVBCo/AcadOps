@@ -134,6 +134,7 @@ class EmailService {
                     host: config.smtp.host,
                     port: config.smtp.port,
                     secure: config.smtp.port === 465,
+                    family: 4, // Force IPv4 — Render free tier doesn't support IPv6
                     auth: {
                         user: config.smtp.user,
                         pass: config.smtp.pass,
@@ -190,6 +191,7 @@ class EmailService {
                     host: config.smtp.host,
                     port: config.smtp.port,
                     secure: config.smtp.port === 465,
+                    family: 4,
                     auth: { user: config.smtp.user, pass: config.smtp.pass },
                 });
             }
