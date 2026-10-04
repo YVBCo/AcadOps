@@ -139,7 +139,7 @@ class EmailService {
                         user: config.smtp.user,
                         pass: config.smtp.pass,
                     },
-                });
+                } as Record<string, unknown>);
             }
 
             const result = await this.transporter.sendMail({
@@ -193,7 +193,7 @@ class EmailService {
                     secure: config.smtp.port === 465,
                     family: 4,
                     auth: { user: config.smtp.user, pass: config.smtp.pass },
-                });
+                } as Record<string, unknown>);
             }
             await this.transporter.verify();
             log.info('SMTP connection verified successfully');
