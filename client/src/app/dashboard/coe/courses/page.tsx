@@ -76,8 +76,12 @@ export default function COECoursesPage() {
             closeModal();
             toast.success('Course created successfully');
         },
-        onError: (error: Error) => {
-            toast.error(error.message || 'Failed to create course');
+        onError: (error: any) => {
+            const validationIssue = error.response?.data?.details?.issues?.[0];
+            const validationMessage = validationIssue
+                ? `${validationIssue.path?.join('.') || 'Course'}: ${validationIssue.message}`
+                : undefined;
+            toast.error(validationMessage || error.response?.data?.error || error.message || 'Failed to create course');
         },
     });
 
