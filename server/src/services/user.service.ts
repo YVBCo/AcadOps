@@ -362,7 +362,10 @@ class UserService {
 
         // Resolve batchId from admissionYear - auto-create batch if it doesn't exist
 
-        let batch = await batchRepository.findByName(String(admissionYear));
+        // Batch names (admission years) are only unique within a tenant.
+        // Looking up by name alone can attach this tenant's students to a
+        // similarly named batch belonging to another institution.
+        let batch = await batchRepository.findByName(String(admissionYear), options.tenantId);
         if (!batch) {
             // Auto-create batch for the admission year with the correct semester
             batch = await batchRepository.create({
@@ -673,7 +676,8 @@ class UserService {
 
 
         // Resolve batchId from admissionYear — auto-create batch if needed
-        let batch = await batchRepository.findByName(String(data.admissionYear));
+        // Batch names (admission years) are only unique within a tenant.
+        let batch = await batchRepository.findByName(String(data.admissionYear), data.tenantId);
         if (!batch) {
             batch = await batchRepository.create({
                 name: String(data.admissionYear),
