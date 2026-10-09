@@ -121,13 +121,13 @@ export default function JobsPage() {
                         <h1 className="text-2xl font-bold text-slate-900">Job Openings</h1>
                         <p className="text-slate-500">Browse and apply for available positions</p>
                     </div>
-                    {(isAdmin || isCompany) && myCompany && (
+                    {isAdmin || (isCompany && myCompany) ? (
                         <button 
                             onClick={() => setShowPostModal(true)}
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
                             Post New Job
                         </button>
-                    )}
+                    ) : null}
                     {isCompany && !myCompany && <Link className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white" href="/dashboard/placement/company">Set up company profile</Link>}
                 </div>
 
