@@ -42,6 +42,19 @@ export default function DrivesPage() {
         onError: (err: any) => alert(err.response?.data?.error || err.message)
     });
 
+    const createCompanyMutation = useMutation({
+        mutationFn: (name: string) => placementApi.createCompany({ name, website: 'https://example.com', industry: 'IT' }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+            alert('Company created successfully!');
+        }
+    });
+
+    const handleCreateCompany = () => {
+        const name = prompt('Enter new company name:');
+        if (name) createCompanyMutation.mutate(name);
+    };
+
     const handleScheduleDrive = (e: React.FormEvent) => {
         e.preventDefault();
         createDriveMutation.mutate({
@@ -148,7 +161,12 @@ export default function DrivesPage() {
                         </div>
                         <form onSubmit={handleScheduleDrive} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">Company</label>
+                                    <button type="button" onClick={handleCreateCompany} className="text-xs text-indigo-600 font-medium hover:underline">
+                                        + Quick Add
+                                    </button>
+                                </div>
                                 <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
                                     <option value="">Select a company</option>
                                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}

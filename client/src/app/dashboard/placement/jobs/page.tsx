@@ -190,7 +190,22 @@ export default function JobsPage() {
                                 <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. Software Engineer" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">Company</label>
+                                    <button type="button" onClick={() => {
+                                        const name = prompt('Enter new company name:');
+                                        if (name) {
+                                            placementApi.createCompany({ name, website: 'https://example.com', industry: 'IT' })
+                                                .then(() => {
+                                                    queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+                                                    alert('Company created! Please select it from the dropdown.');
+                                                })
+                                                .catch(err => alert('Error: ' + err.message));
+                                        }
+                                    }} className="text-xs text-blue-600 font-medium hover:underline">
+                                        + Quick Add
+                                    </button>
+                                </div>
                                 <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">Select a company</option>
                                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
