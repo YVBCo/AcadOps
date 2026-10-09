@@ -18,6 +18,10 @@ export default function JobsPage() {
     const isCompany = user?.role === 'PLACEMENT_COMPANY';
     const [searchTerm, setSearchTerm] = useState('');
     const [showPostModal, setShowPostModal] = useState(false);
+    const [showCompanyForm, setShowCompanyForm] = useState(false);
+    const [companyName, setCompanyName] = useState('');
+    const [companyEmail, setCompanyEmail] = useState('');
+    const [isAddingCompany, setIsAddingCompany] = useState(false);
     
     // Form state
     const [title, setTitle] = useState('');
@@ -70,15 +74,19 @@ export default function JobsPage() {
     });
 
     const addCompany = async () => {
-        const name = prompt('Company name:');
-        if (!name?.trim()) return;
-        const email = prompt('Company contact email:');
-        if (!email?.trim()) return;
+        if (!companyName.trim() || !companyEmail.trim()) return;
         try {
-            await placementApi.createCompany({ name: name.trim(), email: email.trim() });
+            setIsAddingCompany(true);
+            const company = await placementApi.createCompany({ name: companyName.trim(), email: companyEmail.trim() });
             await queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+            if (company?.id) setCompanyId(String(company.id));
+            setCompanyName('');
+            setCompanyEmail('');
+            setShowCompanyForm(false);
         } catch (err: any) {
             alert(err.response?.data?.error || err.message);
+        } finally {
+            setIsAddingCompany(false);
         }
     };
 
@@ -221,8 +229,23 @@ export default function JobsPage() {
                             {isAdmin && <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <label className="block text-sm font-medium text-slate-700">Company</label>
-                                    <button type="button" onClick={addCompany} className="text-xs font-medium text-blue-600 hover:underline">+ Add Company</button>
+                                    <button type="button" onClick={() => setShowCompanyForm(current => !current)} className="text-xs font-medium text-blue-600 hover:underline">{showCompanyForm ? 'Cancel company setup' : '+ Add Company'}</button>
                                 </div>
+                                {showCompanyForm && (
+                                    <div className="mb-3 space-y-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+                                        <div>
+                                            <label htmlFor="new-company-name" className="mb-1 block text-sm font-medium text-slate-700">Company name</label>
+                                            <input id="new-company-name" required minLength={2} maxLength={160} value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full rounded-lg border p-2 focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="new-company-email" className="mb-1 block text-sm font-medium text-slate-700">Company contact email</label>
+                                            <input id="new-company-email" required type="email" maxLength={254} value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} className="w-full rounded-lg border p-2 focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <button type="button" onClick={addCompany} disabled={isAddingCompany || !companyName.trim() || !companyEmail.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
+                                            {isAddingCompany ? 'Adding company…' : 'Save company'}
+                                        </button>
+                                    </div>
+                                )}
                                 <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">Select a company</option>
                                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
