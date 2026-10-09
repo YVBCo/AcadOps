@@ -158,24 +158,20 @@ export function nextAdmissionSequence(...ids: Array<string | null | undefined>):
     }, 1);
 }
 
-export async function generateAdmissionId(tenantId: number, admissionYear?: number): Promise<string> {
-    const year = admissionYear || new Date().getFullYear();
+export async function generateAdmissionId(_tenantId: number, _admissionYear?: number): Promise<string> {
     // Admission approval creates the admission ID on StudentProfile.rollNumber
-    // before it is copied to AdmissionData.admissionId. Looking only at
-    // AdmissionData can therefore reuse ADM0001 when existing student profiles
-    // were created through an earlier path (and fail on the unique rollNumber).
+    // before it is copied to AdmissionData.admissionId. Both fields have global
+    // unique constraints (not tenant-scoped), so allocate from all tenants.
+    // Filtering by tenant/year makes a new tenant's first approval collide with
+    // ADM0001 already held by another tenant and surfaces as a generic P2002.
     const [lastAdmission, lastStudent] = await Promise.all([
         prisma.admissionData.findFirst({
-            where: {
-                enteredByUser: { tenantId },
-                admissionId: { startsWith: 'ADM' },
-                admissionYear: year,
-            },
+            where: { admissionId: { startsWith: 'ADM' } },
             orderBy: { admissionId: 'desc' },
             select: { admissionId: true },
         }),
         prisma.studentProfile.findFirst({
-            where: { user: { tenantId }, rollNumber: { startsWith: 'ADM' } },
+            where: { rollNumber: { startsWith: 'ADM' } },
             orderBy: { rollNumber: 'desc' },
             select: { rollNumber: true },
         }),
@@ -188,11 +184,11 @@ export async function generateAdmissionId(tenantId: number, admissionYear?: numb
         const candidate = `ADM${nextNum.toString().padStart(4, '0')}`;
         const [admissionCollision, studentCollision] = await Promise.all([
             prisma.admissionData.findFirst({
-                where: { enteredByUser: { tenantId }, admissionId: candidate },
+                where: { admissionId: candidate },
                 select: { id: true },
             }),
             prisma.studentProfile.findFirst({
-                where: { user: { tenantId }, rollNumber: candidate },
+                where: { rollNumber: candidate },
                 select: { id: true },
             }),
         ]);
