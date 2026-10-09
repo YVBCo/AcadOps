@@ -63,7 +63,7 @@ export default function NewAdmissionPage() {
     });
 
     // Fetch departments as fallback for branch_select fields
-    const { data: departments = [] } = useQuery<{ id: number; name: string; code: string }[]>({
+    const { data: departments = [], isLoading: departmentsLoading, isError: departmentsError } = useQuery<{ id: number; name: string; code: string }[]>({
         queryKey: ['departments-opted'],
         queryFn: () => departmentApi.getOpted(),
     });
@@ -423,6 +423,13 @@ export default function NewAdmissionPage() {
                                 </label>
                             ))}
                         </div>
+                        {!departmentsLoading && depts.length === 0 && (
+                            <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                                {departmentsError
+                                    ? 'Branch options could not be loaded. Refresh the page or contact your administrator.'
+                                    : 'No admissions branches are configured for this tenant yet. A Super Admin must create a non-cycle department before applications can be submitted.'}
+                            </p>
+                        )}
                     </div>
                 );
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Briefcase, Building2, MapPin, CheckCircle2, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -14,6 +15,7 @@ export default function JobsPage() {
     const queryClient = useQueryClient();
     const isAdmin = ['SUPER_ADMIN', 'DEPARTMENT_ADMIN'].includes(user?.role || '');
     const isStudent = user?.role === 'STUDENT';
+    const isCompany = user?.role === 'PLACEMENT_COMPANY';
     const [searchTerm, setSearchTerm] = useState('');
     const [showPostModal, setShowPostModal] = useState(false);
     
@@ -21,7 +23,7 @@ export default function JobsPage() {
     const [title, setTitle] = useState('');
     const [companyId, setCompanyId] = useState('');
     const [location, setLocation] = useState('');
-    const [ctc, setCtc] = useState('');
+    const [salary, setSalary] = useState('');
 
     const { data: jobs = [], isLoading } = useQuery({
         queryKey: ['placement-jobs'],
@@ -35,6 +37,12 @@ export default function JobsPage() {
         enabled: isAdmin,
     });
 
+    const { data: myCompany } = useQuery({
+        queryKey: ['placement-my-company'],
+        queryFn: placementApi.getMyCompany,
+        enabled: isCompany,
+    });
+
     const createJobMutation = useMutation({
         mutationFn: (data: any) => placementApi.createJob(data),
         onSuccess: () => {
@@ -43,7 +51,7 @@ export default function JobsPage() {
             setTitle('');
             setCompanyId('');
             setLocation('');
-            setCtc('');
+            setSalary('');
             alert('Job posted successfully!');
         },
         onError: (err: any) => alert(err.response?.data?.error || err.message)
@@ -55,14 +63,33 @@ export default function JobsPage() {
         onError: (err: any) => alert(err.response?.data?.error || err.message)
     });
 
+    const approveMutation = useMutation({
+        mutationFn: (jobId: number) => placementApi.approveJob(jobId),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-jobs'] }),
+        onError: (err: any) => alert(err.response?.data?.error || err.message),
+    });
+
+    const addCompany = async () => {
+        const name = prompt('Company name:');
+        if (!name?.trim()) return;
+        const email = prompt('Company contact email:');
+        if (!email?.trim()) return;
+        try {
+            await placementApi.createCompany({ name: name.trim(), email: email.trim() });
+            await queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+        } catch (err: any) {
+            alert(err.response?.data?.error || err.message);
+        }
+    };
+
     const handlePostJob = (e: React.FormEvent) => {
         e.preventDefault();
         createJobMutation.mutate({
             title,
-            companyId: parseInt(companyId),
+            ...(isAdmin ? { companyId: parseInt(companyId) } : {}),
             location,
-            ctc: parseFloat(ctc) || null,
-            type: 'FULL_TIME',
+            salary: salary || undefined,
+            jobType: 'FULL_TIME',
             description: 'Created from UI'
         });
     };
@@ -84,7 +111,7 @@ export default function JobsPage() {
 
     return (
         <DashboardShell 
-            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN']}
+            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PLACEMENT_COMPANY']}
             portalName="Placement Portal"
             basePath="/dashboard/placement"
         >
@@ -94,13 +121,14 @@ export default function JobsPage() {
                         <h1 className="text-2xl font-bold text-slate-900">Job Openings</h1>
                         <p className="text-slate-500">Browse and apply for available positions</p>
                     </div>
-                    {isAdmin && (
+                    {(isAdmin || isCompany) && myCompany && (
                         <button 
                             onClick={() => setShowPostModal(true)}
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
                             Post New Job
                         </button>
                     )}
+                    {isCompany && !myCompany && <Link className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white" href="/dashboard/placement/company">Set up company profile</Link>}
                 </div>
 
                 {/* Search and Filters */}
@@ -155,18 +183,19 @@ export default function JobsPage() {
                                     </div>
                                     <div className="flex items-center text-sm text-slate-500 gap-2">
                                         <Briefcase className="w-4 h-4 text-slate-400" />
-                                        <span>{job.type || 'Full Time'}</span>
+                                        <span>{job.jobType?.replaceAll('_', ' ') || 'Full Time'}</span>
                                     </div>
                                     <div className="flex items-center text-sm font-medium text-emerald-600 gap-2">
                                         <span className="font-bold">₹</span>
-                                        <span>{job.ctc ? `${job.ctc} LPA` : 'Not Disclosed'}</span>
+                                        <span>{job.salary || job.stipend || 'Not Disclosed'}</span>
                                     </div>
                                 </div>
                                 
                                 <button 
-                                    onClick={() => handleJobAction(job.id)}
+                                    onClick={() => isAdmin && !job.isApproved ? approveMutation.mutate(job.id) : handleJobAction(job.id)}
+                                    disabled={approveMutation.isPending || (isCompany && !job.isApproved)}
                                     className="w-full py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-colors font-medium">
-                                    {isStudent ? 'Apply Now' : 'View Details'}
+                                    {approveMutation.isPending && isAdmin && !job.isApproved ? 'Approving…' : isStudent ? 'Apply Now' : isAdmin && !job.isApproved ? 'Approve Job' : isCompany && !job.isApproved ? 'Pending Approval' : 'View Details'}
                                 </button>
                             </Card>
                         ))}
@@ -189,35 +218,23 @@ export default function JobsPage() {
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Job Title</label>
                                 <input required type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. Software Engineer" />
                             </div>
-                            <div>
+                            {isAdmin && <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <label className="block text-sm font-medium text-slate-700">Company</label>
-                                    <button type="button" onClick={() => {
-                                        const name = prompt('Enter new company name:');
-                                        if (name) {
-                                            placementApi.createCompany({ name, website: 'https://example.com', industry: 'IT' })
-                                                .then(() => {
-                                                    queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
-                                                    alert('Company created! Please select it from the dropdown.');
-                                                })
-                                                .catch(err => alert('Error: ' + err.message));
-                                        }
-                                    }} className="text-xs text-blue-600 font-medium hover:underline">
-                                        + Quick Add
-                                    </button>
+                                    <button type="button" onClick={addCompany} className="text-xs font-medium text-blue-600 hover:underline">+ Add Company</button>
                                 </div>
                                 <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                                     <option value="">Select a company</option>
                                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
-                            </div>
+                            </div>}
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
                                 <input required type="text" value={location} onChange={e => setLocation(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. Bangalore, India" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">CTC (LPA)</label>
-                                <input type="number" step="0.1" value={ctc} onChange={e => setCtc(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. 12.5" />
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Salary / CTC</label>
+                                <input type="text" value={salary} onChange={e => setSalary(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g. ₹12.5 LPA" />
                             </div>
                             <div className="pt-4 flex justify-end gap-3">
                                 <button type="button" onClick={() => setShowPostModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancel</button>

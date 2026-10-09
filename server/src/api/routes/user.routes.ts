@@ -41,7 +41,7 @@ const createUserSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     name: z.string().min(2),
-    role: z.enum(['STUDENT', 'TEACHER', 'DEPARTMENT_ADMIN', 'SUPER_ADMIN', 'COE', 'CLERK', 'ADMISSIONS_ADMIN', 'ADMIN_CLERK', 'FIRST_YEAR_COORDINATOR', 'PARENT']),
+    role: z.nativeEnum(UserRole),
     departmentId: z.number().optional(),
     isActive: z.boolean().optional(),
     // Student-specific fields (required when role is STUDENT)
@@ -53,7 +53,7 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
     email: z.string().email().optional(),
     name: z.string().min(2).optional(),
-    role: z.enum(['STUDENT', 'TEACHER', 'DEPARTMENT_ADMIN', 'SUPER_ADMIN', 'COE', 'CLERK', 'ADMISSIONS_ADMIN', 'ADMIN_CLERK', 'FIRST_YEAR_COORDINATOR', 'PARENT']).optional(),
+    role: z.nativeEnum(UserRole).optional(),
     departmentId: z.number().optional(),
     isActive: z.boolean().optional(),
 });

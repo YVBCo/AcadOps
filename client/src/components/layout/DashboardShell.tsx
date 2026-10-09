@@ -35,10 +35,11 @@ export default function DashboardShell({
     const { user, logout, isAuthenticated, isLoading } = useAuthStore();
 
     // Persist tenantSlug in a ref so it survives logout (which sets user to null)
-    const tenantSlugRef = useRef<string | undefined>(user?.tenantSlug);
+    const tenantSlugRef = useRef<string | undefined>(user?.tenantSlug || (typeof window !== 'undefined' ? localStorage.getItem('tenant-slug') || undefined : undefined));
     useEffect(() => {
         if (user?.tenantSlug) {
             tenantSlugRef.current = user.tenantSlug;
+            localStorage.setItem('tenant-slug', user.tenantSlug);
         }
     }, [user?.tenantSlug]);
 

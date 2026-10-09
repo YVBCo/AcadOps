@@ -151,24 +151,54 @@ export function branchToCode(branch: string): string {
 }
 
 // ─── Helper: Generate next admission ID (ADM0001, ADM0002, ...) ──
+export function nextAdmissionSequence(...ids: Array<string | null | undefined>): number {
+    return ids.reduce((next, id) => {
+        const match = id?.match(/^ADM(\d+)$/i);
+        return match ? Math.max(next, Number(match[1]) + 1) : next;
+    }, 1);
+}
+
 export async function generateAdmissionId(tenantId: number, admissionYear?: number): Promise<string> {
     const year = admissionYear || new Date().getFullYear();
-    const last = await prisma.admissionData.findFirst({
-        where: {
-            enteredByUser: { tenantId },
-            admissionId: { startsWith: 'ADM' },
-            admissionYear: year,
-        },
-        orderBy: { admissionId: 'desc' },
-        select: { admissionId: true },
-    });
+    // Admission approval creates the admission ID on StudentProfile.rollNumber
+    // before it is copied to AdmissionData.admissionId. Looking only at
+    // AdmissionData can therefore reuse ADM0001 when existing student profiles
+    // were created through an earlier path (and fail on the unique rollNumber).
+    const [lastAdmission, lastStudent] = await Promise.all([
+        prisma.admissionData.findFirst({
+            where: {
+                enteredByUser: { tenantId },
+                admissionId: { startsWith: 'ADM' },
+                admissionYear: year,
+            },
+            orderBy: { admissionId: 'desc' },
+            select: { admissionId: true },
+        }),
+        prisma.studentProfile.findFirst({
+            where: { user: { tenantId }, rollNumber: { startsWith: 'ADM' } },
+            orderBy: { rollNumber: 'desc' },
+            select: { rollNumber: true },
+        }),
+    ]);
 
-    let nextNum = 1;
-    if (last?.admissionId) {
-        const match = last.admissionId.match(/ADM(\d+)/);
-        if (match) nextNum = parseInt(match[1]) + 1;
+    let nextNum = nextAdmissionSequence(lastAdmission?.admissionId, lastStudent?.rollNumber);
+    // Also account for gaps and historical IDs whose admission year differs.
+    // This avoids colliding with records created by imports or older workflows.
+    for (;;) {
+        const candidate = `ADM${nextNum.toString().padStart(4, '0')}`;
+        const [admissionCollision, studentCollision] = await Promise.all([
+            prisma.admissionData.findFirst({
+                where: { enteredByUser: { tenantId }, admissionId: candidate },
+                select: { id: true },
+            }),
+            prisma.studentProfile.findFirst({
+                where: { user: { tenantId }, rollNumber: candidate },
+                select: { id: true },
+            }),
+        ]);
+        if (!admissionCollision && !studentCollision) return candidate;
+        nextNum++;
     }
-    return `ADM${nextNum.toString().padStart(4, '0')}`;
 }
 
 // ─── Helper: Generate temporary USN (regular) ────────────────────
@@ -307,4 +337,3 @@ export function generatePassword(length = 12): string {
 
     return chars.join('');
 }
-

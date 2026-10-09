@@ -33,7 +33,7 @@ import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/utils';
 import { type BadgeVariant } from '@/components/ui/badge';
 
-const roleIcons: Record<UserRole, any> = {
+const roleIcons: Partial<Record<UserRole, any>> = {
     STUDENT: GraduationCap,
     TEACHER: BookOpen,
     DEPARTMENT_ADMIN: Building2,
@@ -218,7 +218,6 @@ export default function UsersPage() {
             toast.success(`${result.created} students created`);
         },
         onError: (error: unknown) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const axiosError = error as any;
             const message = axiosError?.response?.data?.error
                 || axiosError?.response?.data?.message

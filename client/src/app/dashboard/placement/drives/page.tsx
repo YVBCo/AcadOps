@@ -18,6 +18,7 @@ export default function DrivesPage() {
     // Form state
     const [companyId, setCompanyId] = useState('');
     const [date, setDate] = useState('');
+    const [title, setTitle] = useState('');
 
     const { data: drives = [], isLoading } = useQuery({
         queryKey: ['placement-drives'],
@@ -37,30 +38,19 @@ export default function DrivesPage() {
             setShowModal(false);
             setCompanyId('');
             setDate('');
+            setTitle('');
             alert('Drive scheduled successfully!');
         },
         onError: (err: any) => alert(err.response?.data?.error || err.message)
     });
 
-    const createCompanyMutation = useMutation({
-        mutationFn: (name: string) => placementApi.createCompany({ name, website: 'https://example.com', industry: 'IT' }),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
-            alert('Company created successfully!');
-        }
-    });
-
-    const handleCreateCompany = () => {
-        const name = prompt('Enter new company name:');
-        if (name) createCompanyMutation.mutate(name);
-    };
-
     const handleScheduleDrive = (e: React.FormEvent) => {
         e.preventDefault();
         createDriveMutation.mutate({
             companyId: parseInt(companyId),
-            date: new Date(date).toISOString(),
-            status: 'SCHEDULED'
+            title,
+            driveDate: new Date(`${date}T00:00:00`).toISOString(),
+            status: 'ACTIVE'
         });
     };
 
@@ -68,7 +58,7 @@ export default function DrivesPage() {
         switch(status?.toUpperCase()) {
             case 'ACTIVE': return 'bg-emerald-100 text-emerald-700';
             case 'COMPLETED': return 'bg-slate-100 text-slate-700';
-            case 'SCHEDULED': return 'bg-blue-100 text-blue-700';
+            case 'DRAFT': return 'bg-blue-100 text-blue-700';
             default: return 'bg-slate-100 text-slate-700';
         }
     };
@@ -125,7 +115,7 @@ export default function DrivesPage() {
                                             <div className="flex items-center gap-4 text-sm text-slate-500">
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="w-4 h-4" />
-                                                    <span>{new Date(drive.date).toLocaleDateString()}</span>
+                                                    <span>{drive.driveDate ? new Date(drive.driveDate).toLocaleDateString() : 'Date not set'}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -161,16 +151,15 @@ export default function DrivesPage() {
                         </div>
                         <form onSubmit={handleScheduleDrive} className="space-y-4">
                             <div>
-                                <div className="flex justify-between items-center mb-1">
-                                    <label className="block text-sm font-medium text-slate-700">Company</label>
-                                    <button type="button" onClick={handleCreateCompany} className="text-xs text-indigo-600 font-medium hover:underline">
-                                        + Quick Add
-                                    </button>
-                                </div>
+                                <label className="mb-1 block text-sm font-medium text-slate-700">Company</label>
                                 <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
                                     <option value="">Select a company</option>
                                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Drive title</label>
+                                <input required minLength={2} value={title} onChange={e => setTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Graduate Engineer Hiring" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Drive Date</label>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
     Building2,
@@ -33,8 +35,15 @@ import { QuickActionCard, QuickActionsGrid } from '@/components/layout/QuickActi
 
 export default function AdminDashboard() {
     const { user } = useAuthStore();
+    const router = useRouter();
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const isEngineering = user?.tenantType === 'ENGINEERING';
+
+    useEffect(() => {
+        if (user?.role === 'DEPARTMENT_ADMIN') {
+            router.replace('/dashboard/dept-admin');
+        }
+    }, [router, user?.role]);
 
     const { data: departments = [], isLoading: deptLoading } = useQuery({
         queryKey: ['departments'],
@@ -48,6 +57,8 @@ export default function AdminDashboard() {
 
     const activeSemester = semesters.find((s: { status: string }) => s.status === 'ACTIVE');
     const isLoading = deptLoading || semLoading;
+
+    if (user?.role === 'DEPARTMENT_ADMIN') return null;
 
     if (isLoading) {
         return (
@@ -223,6 +234,16 @@ export default function AdminDashboard() {
                         subtitle="Manage academic departments"
                         iconColor="text-blue-600"
                         iconBgColor="bg-blue-50"
+                    />
+                )}
+                {isSuperAdmin && (
+                    <QuickActionCard
+                        href="/dashboard/admin/academic-programs"
+                        icon={GraduationCap}
+                        label="Programs"
+                        subtitle="Create degree programs and link departments"
+                        iconColor="text-indigo-600"
+                        iconBgColor="bg-indigo-50"
                     />
                 )}
                 <QuickActionCard

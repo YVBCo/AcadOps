@@ -110,6 +110,16 @@ export default function NoDueDashboard() {
                             iconBgColor="bg-violet-50"
                         />
                     )}
+                    {(user?.role === 'PRINCIPAL' || user?.role === 'SUPER_ADMIN') && (
+                        <QuickActionCard
+                            href="/dashboard/nodue/principal"
+                            icon={CheckCircle2}
+                            label="Principal Approval"
+                            subtitle="Complete final clearance reviews"
+                            iconColor="text-emerald-600"
+                            iconBgColor="bg-emerald-50"
+                        />
+                    )}
                     {(user?.role === 'ACCOUNTS_STAFF' || user?.role === 'CLERK' || user?.role === 'SUPER_ADMIN') && (
                         <QuickActionCard
                             href="/dashboard/nodue/accounts"

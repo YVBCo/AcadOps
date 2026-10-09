@@ -50,8 +50,8 @@ export default function FacultyNoDuePage() {
     };
 
     const filtered = students?.filter((s: any) => 
-        s.student?.user?.name?.toLowerCase().includes(search.toLowerCase()) || 
-        s.student?.user?.rollNumber?.toLowerCase().includes(search.toLowerCase())
+        s.student?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        s.student?.studentProfile?.rollNumber?.toLowerCase().includes(search.toLowerCase())
     ) || [];
 
     return (
@@ -96,9 +96,9 @@ export default function FacultyNoDuePage() {
                                     filtered.map((enrollment: any) => (
                                         <tr key={enrollment.id} className="hover:bg-slate-50/50">
                                             <td className="py-3 px-4">
-                                                <div className="font-medium text-slate-800">{enrollment.student?.user?.name}</div>
+                                                <div className="font-medium text-slate-800">{enrollment.student?.name}</div>
                                             </td>
-                                            <td className="py-3 px-4 text-sm text-slate-600">{enrollment.student?.user?.rollNumber || '-'}</td>
+                                            <td className="py-3 px-4 text-sm text-slate-600">{enrollment.student?.studentProfile?.rollNumber || '-'}</td>
                                             <td className="py-3 px-4 text-sm text-slate-600">
                                                 {enrollment.subject?.course?.name} ({enrollment.subject?.course?.code})
                                             </td>

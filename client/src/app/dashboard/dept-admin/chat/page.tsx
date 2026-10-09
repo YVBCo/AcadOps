@@ -122,7 +122,7 @@ export default function DeptAdminChatPage() {
                 setShowMobileList(false);
             }
         }
-    }, [studentIdParam, convsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [studentIdParam, convsLoading]);
 
     // Scroll to bottom on new messages
     useEffect(() => {

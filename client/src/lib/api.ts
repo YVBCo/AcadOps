@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { API_URL } from './config';
+import { useAuthStore } from './auth-store';
 
 
 export const api = axios.create({
@@ -29,6 +30,23 @@ api.interceptors.request.use(
 // ─── Retry interceptor for transient errors (502/503/504 from Render cold starts) ───
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 2000; // 2s base delay
+let refreshInFlight: Promise<string> | null = null;
+
+function redirectToTenantLogin() {
+    if (typeof window === 'undefined') return;
+
+    let tenantSlug = localStorage.getItem('tenant-slug');
+    try {
+        const authStorage = localStorage.getItem('auth-storage');
+        if (authStorage) {
+            const parsed = JSON.parse(authStorage);
+            tenantSlug = parsed?.state?.user?.tenantSlug || tenantSlug;
+        }
+    } catch { /* ignore malformed persisted state */ }
+
+    useAuthStore.getState().logout();
+    window.location.href = tenantSlug ? `/login?tenant=${encodeURIComponent(tenantSlug)}` : '/login';
+}
 
 api.interceptors.response.use(undefined, async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig & { _retryCount?: number };
@@ -53,24 +71,46 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
 // Response interceptor for error handling
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
-            if (typeof window !== 'undefined') {
-                // Preserve tenant context when redirecting to login
-                let loginUrl = '/login';
+    async (error: AxiosError) => {
+        // A bad login is expected to return 401. Keep it on the tenant login
+        // page so the form can show the API error instead of clearing context
+        // and sending the user back to the institution picker.
+        const requestPath = error.config?.url?.split('?')[0].replace(/\/+$/, '');
+        const isLoginRequest = requestPath?.endsWith('/auth/login');
+        const isRefreshRequest = requestPath?.endsWith('/auth/refresh');
+
+        if (error.response?.status === 401 && !isLoginRequest && typeof window !== 'undefined') {
+            const config = error.config as (InternalAxiosRequestConfig & { _authRetryCount?: number }) | undefined;
+            const refreshToken = localStorage.getItem('refresh-token');
+
+            if (!isRefreshRequest && config && !config._authRetryCount && refreshToken) {
+                config._authRetryCount = 1;
                 try {
-                    const authStorage = localStorage.getItem('auth-storage');
-                    if (authStorage) {
-                        const parsed = JSON.parse(authStorage);
-                        const tenantSlug = parsed?.state?.user?.tenantSlug;
-                        if (tenantSlug) {
-                            loginUrl = `/login?tenant=${tenantSlug}`;
-                        }
+                    if (!refreshInFlight) {
+                        refreshInFlight = api.post<{ accessToken: string; refreshToken: string }>(
+                            '/auth/refresh',
+                            { refreshToken }
+                        ).then(({ data }) => {
+                            if (!data.accessToken || !data.refreshToken) {
+                                throw new Error('Token refresh response was incomplete');
+                            }
+                            localStorage.setItem('token', data.accessToken);
+                            localStorage.setItem('refresh-token', data.refreshToken);
+                            useAuthStore.getState().setAccessToken(data.accessToken);
+                            return data.accessToken;
+                        }).finally(() => {
+                            refreshInFlight = null;
+                        });
                     }
-                } catch { /* ignore parse errors */ }
-                localStorage.removeItem('token');
-                localStorage.removeItem('auth-storage');
-                window.location.href = loginUrl;
+
+                    const accessToken = await refreshInFlight;
+                    config.headers.Authorization = `Bearer ${accessToken}`;
+                    return api.request(config);
+                } catch {
+                    redirectToTenantLogin();
+                }
+            } else if (!isRefreshRequest || refreshToken) {
+                redirectToTenantLogin();
             }
         }
         return Promise.reject(error);
@@ -1764,6 +1804,9 @@ export const studentTimetableApi = {
 // PLACEMENT API
 // ============================================
 export const placementApi = {
+    getMyCompany: async () => { const r = await api.get('/placement/companies/me'); return r.data; },
+    createMyCompany: async (data: any) => { const r = await api.post('/placement/companies', data); return r.data; },
+    updateMyCompany: async (data: any) => { const r = await api.patch('/placement/companies/me', data); return r.data; },
     getCompanies: async (params?: any) => { const r = await api.get('/placement/companies', { params }); return r.data; },
     getCompany: async (id: number) => { const r = await api.get(`/placement/companies/${id}`); return r.data; },
     createCompany: async (data: any) => { const r = await api.post('/placement/companies', data); return r.data; },
@@ -1785,7 +1828,12 @@ export const placementApi = {
     withdrawApplication: async (id: number) => { const r = await api.patch(`/placement/applications/${id}/withdraw`); return r.data; },
     getProfile: async () => { const r = await api.get('/placement/profile'); return r.data; },
     updateProfile: async (data: any) => { const r = await api.patch('/placement/profile', data); return r.data; },
-    uploadCv: async (data: any) => { const r = await api.post('/placement/profile/cv', data); return r.data; },
+    uploadCv: async (file: File) => {
+        const form = new FormData();
+        form.append('file', file);
+        const r = await api.post('/placement/profile/cv', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+        return r.data;
+    },
     submitDeclaration: async (data: any) => { const r = await api.post('/placement/profile/declaration', data); return r.data; },
     getStats: async () => { const r = await api.get('/placement/analytics/stats'); return r.data; },
     getDeptWiseStats: async () => { const r = await api.get('/placement/analytics/dept-wise'); return r.data; },

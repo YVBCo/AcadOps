@@ -8,7 +8,17 @@
  *   ✅ Parent emails are still sent
  */
 import { describe, it, expect } from 'vitest';
-import { generateStudentPassword, branchToCode } from './shared.js';
+import { generateStudentPassword, branchToCode, nextAdmissionSequence } from './shared.js';
+
+describe('nextAdmissionSequence', () => {
+    it('continues after IDs already allocated to student profiles', () => {
+        expect(nextAdmissionSequence('ADM0002', 'ADM0007')).toBe(8);
+    });
+
+    it('starts at one when there are no existing IDs', () => {
+        expect(nextAdmissionSequence(null, undefined)).toBe(1);
+    });
+});
 
 describe('generateStudentPassword', () => {
     it('should generate password in BRANCH_CODE + BATCH_YEAR format', () => {

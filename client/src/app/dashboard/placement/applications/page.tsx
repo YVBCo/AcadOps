@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, CheckCircle2, XCircle, Clock, Search, Filter } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import DashboardShell from '@/components/layout/DashboardShell';
@@ -11,11 +11,18 @@ import { placementApi } from '@/lib/api';
 export default function ApplicationsPage() {
     const { user } = useAuthStore();
     const isStudent = user?.role === 'STUDENT';
+    const isCompany = user?.role === 'PLACEMENT_COMPANY';
+    const queryClient = useQueryClient();
     const [statusFilter, setStatusFilter] = useState('ALL');
 
     const { data: applications = [], isLoading } = useQuery({
         queryKey: ['placement-applications'],
         queryFn: () => placementApi.getApplications(),
+    });
+
+    const updateStatus = useMutation({
+        mutationFn: ({ id, status }: { id: number; status: string }) => placementApi.updateApplicationStatus(id, { status }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-applications'] }),
     });
 
     const getStatusIcon = (status: string) => {
@@ -42,7 +49,7 @@ export default function ApplicationsPage() {
 
     return (
         <DashboardShell 
-            allowedRoles={['STUDENT', 'SUPER_ADMIN']}
+            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PLACEMENT_COMPANY']}
             portalName="Placement Portal"
             basePath="/dashboard/placement"
         >
@@ -119,9 +126,11 @@ export default function ApplicationsPage() {
                                             </td>
                                             {!isStudent && (
                                                 <td className="p-4">
-                                                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                                                        Update
-                                                    </button>
+                                                    {isCompany ? (
+                                                        <select aria-label={`Update status for ${app.student?.user?.name || 'student'}`} value={app.status} disabled={updateStatus.isPending} onChange={event => updateStatus.mutate({ id: app.id, status: event.target.value })} className="rounded-md border border-slate-300 px-2 py-1 text-sm">
+                                                            {['APPLIED', 'SHORTLISTED', 'ON_HOLD', 'SELECTED', 'REJECTED'].map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+                                                        </select>
+                                                    ) : <span className="text-sm text-slate-400">Read only</span>}
                                                 </td>
                                             )}
                                         </tr>

@@ -4,13 +4,6 @@ const nextConfig: NextConfig = {
   experimental: { optimizePackageImports: ['lucide-react'] },
   compiler: { removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false },
 
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
   // Remove X-Powered-By header
   poweredByHeader: false,
 

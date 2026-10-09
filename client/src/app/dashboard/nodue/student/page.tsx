@@ -35,8 +35,8 @@ export default function StudentNoDuePage() {
     });
 
     const renderStepper = () => {
-        const stages = ['NOT_APPLIED', 'SUBJECT_REVIEW', 'HOD_REVIEW', 'LIBRARY_REVIEW', 'ACCOUNTS_REVIEW', 'PRINCIPAL_REVIEW', 'CLEARED'];
-        const currentIdx = status ? stages.indexOf(status.currentStage || 'NOT_APPLIED') : 0;
+        const stages = ['STUDENT_APPLICATION', 'FACULTY_REVIEW', 'LIBRARY_REVIEW', 'DEPARTMENT_REVIEW', 'HOD_REVIEW', 'PRINCIPAL_REVIEW', 'CLEARED'];
+        const currentIdx = status ? Math.max(0, stages.indexOf(status.currentStage || 'STUDENT_APPLICATION')) : 0;
 
         return (
             <div className="flex items-center justify-between mt-8 relative">
@@ -66,7 +66,7 @@ export default function StudentNoDuePage() {
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-slate-800">My Clearance Status</h1>
-                    {(!status || status.currentStage === 'NOT_APPLIED' || status.currentStage === 'REJECTED') && (
+                    {(!status || status.currentStage === 'STUDENT_APPLICATION' || status.currentStage === 'REJECTED') && (
                         <Button 
                             onClick={() => applyMutation.mutate()} 
                             disabled={applyMutation.isPending}
@@ -123,16 +123,13 @@ export default function StudentNoDuePage() {
                                 {dues.map((due: any) => (
                                     <div key={due.id} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="font-medium">{due.feeCategory?.name || 'College Dues'}</span>
-                                            <span className="font-bold text-red-600">₹{due.amount}</span>
+                                            <span className="font-medium">{due.description || due.dueType || 'College Dues'}</span>
+                                            <span className="font-bold text-red-600">₹{due.fineAmount}</span>
                                         </div>
                                         <div className="flex justify-between items-center mt-2">
-                                            <Badge variant={due.status === 'PAID' ? 'success' : due.status === 'WAIVED' ? 'neutral' : 'error'}>
+                                            <Badge variant={due.status === 'COMPLETED' ? 'success' : due.status === 'WAIVED' ? 'neutral' : 'error'}>
                                                 {due.status}
                                             </Badge>
-                                            {due.status === 'UNPAID' && (
-                                                <Button size="sm" variant="outline" className="h-7 text-xs">Pay Now</Button>
-                                            )}
                                         </div>
                                     </div>
                                 ))}

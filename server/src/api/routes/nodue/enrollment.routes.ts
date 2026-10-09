@@ -39,10 +39,14 @@ router.patch('/:id/reject', authenticate, requireRole('TEACHER'), async (req: Re
     }
 });
 
-router.get('/student/:studentId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/student/:studentId', authenticate, requireRole('TEACHER', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const enrollments = await prisma.nodueSubjectEnrollment.findMany({
-            where: { tenantId: req.tenantId!, studentId: Number(req.params.studentId) },
+            where: {
+                tenantId: req.tenantId!,
+                studentId: Number(req.params.studentId),
+                ...(req.user!.role === 'TEACHER' ? { teacherId: req.user!.userId } : {}),
+            },
             include: { subject: { select: { id: true, course: { select: { name: true, code: true } } } } },
         });
         res.json(enrollments);

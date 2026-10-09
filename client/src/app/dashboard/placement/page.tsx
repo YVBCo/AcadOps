@@ -21,6 +21,7 @@ import { QuickActionCard, QuickActionsGrid } from '@/components/layout/QuickActi
 export default function PlacementDashboard() {
     const { user } = useAuthStore();
     const isStudent = user?.role === 'STUDENT';
+    const isCompany = user?.role === 'PLACEMENT_COMPANY';
     const isAdmin = ['SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PRINCIPAL'].includes(user?.role || '');
 
     const { data: stats, isLoading: statsLoading } = useQuery({
@@ -38,7 +39,7 @@ export default function PlacementDashboard() {
 
     return (
         <DashboardShell 
-            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PRINCIPAL']}
+            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PRINCIPAL', 'PLACEMENT_COMPANY']}
             portalName="Placement Portal"
             basePath="/dashboard/placement"
         >
@@ -53,7 +54,9 @@ export default function PlacementDashboard() {
                         <p className="text-blue-100 text-sm lg:text-base">
                             {isStudent 
                                 ? "Manage your profile, apply for jobs, and track your applications." 
-                                : "Manage campus drives, student applications, and placement analytics."}
+                                : isCompany
+                                    ? "Manage your company profile, job postings, and candidate applications."
+                                    : "Manage campus drives, student applications, and placement analytics."}
                         </p>
                     </div>
                 </div>
@@ -116,8 +119,8 @@ export default function PlacementDashboard() {
                                                 {drive.company?.name?.charAt(0) || 'C'}
                                             </div>
                                             <div>
-                                                <h4 className="font-medium text-slate-800">{drive.company?.name || 'Company Name'}</h4>
-                                                <p className="text-sm text-slate-500">{new Date(drive.date).toLocaleDateString()}</p>
+                                                <h4 className="font-medium text-slate-800">{drive.title || drive.company?.name || 'Company Name'}</h4>
+                                                <p className="text-sm text-slate-500">{drive.driveDate ? new Date(drive.driveDate).toLocaleDateString() : 'Date not set'} · {drive.company?.name || 'Company'}</p>
                                             </div>
                                         </div>
                                         <ChevronRight className="w-5 h-5 text-slate-400" />
@@ -159,6 +162,18 @@ export default function PlacementDashboard() {
                                     <div className="flex-1">
                                         <h4 className="font-medium text-slate-800 group-hover:text-emerald-600 transition-colors">My Profile</h4>
                                         <p className="text-xs text-slate-500">Update CV and details</p>
+                                    </div>
+                                </Link>
+                            )}
+
+                            {isCompany && (
+                                <Link href="/dashboard/placement/company" className="flex items-center gap-3 p-4 rounded-xl bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all group">
+                                    <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                                        <Building2 className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-medium text-slate-800 group-hover:text-emerald-600 transition-colors">Company Profile</h4>
+                                        <p className="text-xs text-slate-500">Set up your company details</p>
                                     </div>
                                 </Link>
                             )}

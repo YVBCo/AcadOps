@@ -130,8 +130,9 @@ function LoginForm() {
         setIsLoading(true);
 
         try {
-            const { user, token } = await authApi.login(identifier, password, tenantSlug || undefined);
-            setAuth(user, token);
+            if (tenantSlug) localStorage.setItem('tenant-slug', tenantSlug);
+            const { user, token, refreshToken } = await authApi.login(identifier, password, tenantSlug || undefined);
+            setAuth(user, token, refreshToken);
 
             const roleRoutes: Record<string, string> = {
                 SUPER_ADMIN: '/dashboard/admin',
@@ -143,6 +144,10 @@ function LoginForm() {
                 ADMISSIONS_ADMIN: '/dashboard/admissions',
                 ADMIN_CLERK: '/dashboard/admissions',
                 PARENT: '/dashboard/parent',
+                PRINCIPAL: '/dashboard/nodue',
+                ACCOUNTS_STAFF: '/dashboard/nodue/accounts',
+                LIBRARIAN: '/dashboard/nodue/library',
+                PLACEMENT_COMPANY: '/dashboard/placement',
             };
             router.push(roleRoutes[user.role] || '/dashboard/student');
         } catch (err: unknown) {

@@ -1,7 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type UserRole = 'STUDENT' | 'TEACHER' | 'DEPARTMENT_ADMIN' | 'SUPER_ADMIN' | 'COE' | 'CLERK' | 'ADMISSIONS_ADMIN' | 'ADMIN_CLERK' | 'FIRST_YEAR_COORDINATOR' | 'PARENT';
+export type UserRole =
+    | 'STUDENT'
+    | 'TEACHER'
+    | 'DEPARTMENT_ADMIN'
+    | 'SUPER_ADMIN'
+    | 'COE'
+    | 'CLERK'
+    | 'ADMISSIONS_ADMIN'
+    | 'ADMIN_CLERK'
+    | 'FIRST_YEAR_COORDINATOR'
+    | 'PARENT'
+    | 'LIBRARIAN'
+    | 'PRINCIPAL'
+    | 'ACCOUNTS_STAFF'
+    | 'PLACEMENT_COMPANY';
 
 export interface User {
     id: number;
@@ -25,7 +39,8 @@ interface AuthState {
     isAuthenticated: boolean;
     isLoading: boolean;
     isHydrated: boolean;
-    setAuth: (user: User, token: string) => void;
+    setAuth: (user: User, token: string, refreshToken?: string) => void;
+    setAccessToken: (token: string) => void;
     logout: () => void;
     setLoading: (loading: boolean) => void;
     setHydrated: () => void;
@@ -40,13 +55,20 @@ export const useAuthStore = create<AuthState>()(
             isLoading: true,
             isHydrated: false,
 
-            setAuth: (user, token) => {
+            setAuth: (user, token, refreshToken) => {
                 localStorage.setItem('token', token);
+                if (refreshToken) localStorage.setItem('refresh-token', refreshToken);
                 set({ user, token, isAuthenticated: true, isLoading: false });
+            },
+
+            setAccessToken: (token) => {
+                localStorage.setItem('token', token);
+                set({ token });
             },
 
             logout: () => {
                 localStorage.removeItem('token');
+                localStorage.removeItem('refresh-token');
                 set({ user: null, token: null, isAuthenticated: false, isLoading: false });
             },
 
@@ -81,6 +103,10 @@ export const roleLabels: Record<UserRole, string> = {
     ADMIN_CLERK: 'Administration Clerk',
     FIRST_YEAR_COORDINATOR: 'First Year Coordinator',
     PARENT: 'Parent',
+    LIBRARIAN: 'Librarian',
+    PRINCIPAL: 'Principal',
+    ACCOUNTS_STAFF: 'Accounts Staff',
+    PLACEMENT_COMPANY: 'Placement Company',
 };
 
 
@@ -95,6 +121,10 @@ export const roleColors: Record<UserRole, string> = {
     ADMIN_CLERK: 'badge-neutral',
     FIRST_YEAR_COORDINATOR: 'badge-primary',
     PARENT: 'badge-success',
+    LIBRARIAN: 'badge-info',
+    PRINCIPAL: 'badge-error',
+    ACCOUNTS_STAFF: 'badge-warning',
+    PLACEMENT_COMPANY: 'badge-accent',
 };
 
 
@@ -109,6 +139,10 @@ export const roleVariants: Record<UserRole, "primary" | "success" | "warning" | 
     ADMIN_CLERK: 'outline',
     FIRST_YEAR_COORDINATOR: 'primary',
     PARENT: 'success',
+    LIBRARIAN: 'primary',
+    PRINCIPAL: 'error',
+    ACCOUNTS_STAFF: 'warning',
+    PLACEMENT_COMPANY: 'neutral',
 };
 
 export const canAccessAdminPanel = (role?: UserRole): boolean => {

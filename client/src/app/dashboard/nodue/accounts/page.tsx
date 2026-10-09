@@ -28,13 +28,30 @@ export default function AccountsNoDuePage() {
         onError: () => toast.error('Failed to update due')
     });
 
-    const handleUpdateStatus = (id: number, status: string) => {
-        updateDueMutation.mutate({ id, data: { status } });
+    const handleUpdateStatus = (due: any, status: string) => {
+        updateDueMutation.mutate({ id: due.id, data: { status, ...(status === 'COMPLETED' ? { paidAmount: Number(due.fineAmount) } : {}) } });
+    };
+
+    const handleAddDue = async () => {
+        const studentId = Number(prompt('Student user ID:'));
+        if (!Number.isInteger(studentId) || studentId <= 0) return;
+        const dueType = prompt('Due type (e.g. COLLEGE_FEE):', 'COLLEGE_FEE');
+        if (!dueType?.trim()) return;
+        const amount = Number(prompt('Amount due:'));
+        if (!Number.isFinite(amount) || amount < 0) return;
+        const description = prompt('Description (optional):') || undefined;
+        try {
+            await nodueApi.createDue({ studentId, dueType: dueType.trim(), fineAmount: amount, description });
+            toast.success('Due added successfully');
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'dues', 'all'] });
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Failed to add due');
+        }
     };
 
     const filtered = dues?.filter((d: any) => 
-        d.student?.user?.name?.toLowerCase().includes(search.toLowerCase()) || 
-        d.student?.user?.rollNumber?.toLowerCase().includes(search.toLowerCase())
+        d.student?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        d.student?.studentProfile?.rollNumber?.toLowerCase().includes(search.toLowerCase())
     ) || [];
 
     return (
@@ -57,7 +74,7 @@ export default function AccountsNoDuePage() {
                                 className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
                             />
                         </div>
-                        <Button><Plus className="w-4 h-4 mr-1" /> Add Due</Button>
+                        <Button onClick={handleAddDue}><Plus className="w-4 h-4 mr-1" /> Add Due</Button>
                     </div>
                 </div>
 
@@ -83,23 +100,23 @@ export default function AccountsNoDuePage() {
                                     filtered.map((due: any) => (
                                         <tr key={due.id} className="hover:bg-slate-50/50">
                                             <td className="py-3 px-4">
-                                                <div className="font-medium text-slate-800">{due.student?.user?.name}</div>
+                                                <div className="font-medium text-slate-800">{due.student?.name}</div>
                                             </td>
-                                            <td className="py-3 px-4 text-sm text-slate-600">{due.student?.user?.rollNumber || '-'}</td>
+                                            <td className="py-3 px-4 text-sm text-slate-600">{due.student?.studentProfile?.rollNumber || '-'}</td>
                                             <td className="py-3 px-4 text-sm text-slate-600">
-                                                {due.feeCategory?.name || 'General Due'}
+                                                {due.description || due.dueType || 'General Due'}
                                             </td>
-                                            <td className="py-3 px-4 font-semibold">₹{due.amount}</td>
+                                            <td className="py-3 px-4 font-semibold">₹{due.fineAmount}</td>
                                             <td className="py-3 px-4">
-                                                <Badge variant={due.status === 'PAID' ? 'success' : due.status === 'WAIVED' ? 'neutral' : 'error'}>
+                                                <Badge variant={due.status === 'COMPLETED' ? 'success' : due.status === 'WAIVED' ? 'neutral' : 'error'}>
                                                     {due.status}
                                                 </Badge>
                                             </td>
                                             <td className="py-3 px-4">
-                                                {due.status === 'UNPAID' && (
+                                                {due.status === 'PENDING' && (
                                                     <div className="flex items-center gap-2">
-                                                        <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200" onClick={() => handleUpdateStatus(due.id, 'PAID')}>Mark Paid</Button>
-                                                        <Button size="sm" variant="outline" className="h-8 text-slate-600 border-slate-200" onClick={() => handleUpdateStatus(due.id, 'WAIVED')}>Waive</Button>
+                                                        <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200" onClick={() => handleUpdateStatus(due, 'COMPLETED')}>Mark Paid</Button>
+                                                        <Button size="sm" variant="outline" className="h-8 text-slate-600 border-slate-200" onClick={() => handleUpdateStatus(due, 'WAIVED')}>Waive</Button>
                                                     </div>
                                                 )}
                                             </td>

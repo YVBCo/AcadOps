@@ -46,6 +46,9 @@ const models = [
     'chatConversation', 'chatMessage', 'mentorAssignment', 'mentorSession',
     'timetableEntry', 'systemError', 'parsingCorrection', 'formConfig',
     'usnRequest', 'programCourse',
+    'placementCompany', 'placementJob', 'placementStudentProfile', 'placementDrive',
+    'placementApplication', 'placementCv', 'placementDeclaration', 'placementOfferLetter', 'placementRound',
+    'nodueClearanceRequest', 'nodueSubjectEnrollment', 'nodueLibraryDue', 'nodueStudentDue', 'nodueDue', 'nodueFineCategory',
 ] as const;
 
 type PrismaMock = Record<string, Record<string, ReturnType<typeof vi.fn>>> & {

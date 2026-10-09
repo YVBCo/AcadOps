@@ -28,13 +28,28 @@ export default function LibraryNoDuePage() {
         onError: () => toast.error('Failed to update library due')
     });
 
-    const handleClear = (id: number) => {
-        updateLibraryDueMutation.mutate({ id, data: { hasDues: false, fineAmount: 0 } });
+    const handleClear = (record: any) => {
+        updateLibraryDueMutation.mutate({ id: record.id, data: { status: 'COMPLETED', paidAmount: Number(record.fineAmount) } });
+    };
+
+    const handleAddRecord = async () => {
+        const studentId = Number(prompt('Student user ID:'));
+        if (!Number.isInteger(studentId) || studentId <= 0) return;
+        const fineAmount = Number(prompt('Library fine amount:'));
+        if (!Number.isFinite(fineAmount) || fineAmount < 0) return;
+        const remarks = prompt('Remarks (optional):') || undefined;
+        try {
+            await nodueApi.createLibraryDue({ studentId, fineAmount, remarks });
+            toast.success('Library record added successfully');
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'dues', 'library'] });
+        } catch (error: any) {
+            toast.error(error.response?.data?.error || 'Failed to add library record');
+        }
     };
 
     const filtered = libraryDues?.filter((d: any) => 
-        d.student?.user?.name?.toLowerCase().includes(search.toLowerCase()) || 
-        d.student?.user?.rollNumber?.toLowerCase().includes(search.toLowerCase())
+        d.student?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        d.student?.studentProfile?.rollNumber?.toLowerCase().includes(search.toLowerCase())
     ) || [];
 
     return (
@@ -57,7 +72,7 @@ export default function LibraryNoDuePage() {
                                 className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
                             />
                         </div>
-                        <Button><Plus className="w-4 h-4 mr-1" /> Add Record</Button>
+                        <Button onClick={handleAddRecord}><Plus className="w-4 h-4 mr-1" /> Add Record</Button>
                     </div>
                 </div>
 
@@ -83,10 +98,10 @@ export default function LibraryNoDuePage() {
                                     filtered.map((record: any) => (
                                         <tr key={record.id} className="hover:bg-slate-50/50">
                                             <td className="py-3 px-4">
-                                                <div className="font-medium text-slate-800">{record.student?.user?.name}</div>
+                                                <div className="font-medium text-slate-800">{record.student?.name}</div>
                                             </td>
-                                            <td className="py-3 px-4 text-sm text-slate-600">{record.student?.user?.rollNumber || '-'}</td>
-                                            <td className="py-3 px-4 text-sm text-slate-600">{record.booksHeld || 0}</td>
+                                            <td className="py-3 px-4 text-sm text-slate-600">{record.student?.studentProfile?.rollNumber || '-'}</td>
+                                            <td className="py-3 px-4 text-sm text-slate-600">{record.remarks || 'Library fine'}</td>
                                             <td className="py-3 px-4 font-semibold text-red-600">
                                                 {record.fineAmount > 0 ? `₹${record.fineAmount}` : '-'}
                                             </td>
@@ -97,7 +112,7 @@ export default function LibraryNoDuePage() {
                                             </td>
                                             <td className="py-3 px-4">
                                                 {record.hasDues && (
-                                                    <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleClear(record.id)}>
+                                                    <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleClear(record)}>
                                                         Mark Cleared
                                                     </Button>
                                                 )}
