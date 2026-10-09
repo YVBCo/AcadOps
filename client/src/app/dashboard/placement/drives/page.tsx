@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Calendar, Building2, Users, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Calendar, Building2, Users, ArrowRight, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import DashboardShell from '@/components/layout/DashboardShell';
@@ -10,12 +11,45 @@ import { placementApi } from '@/lib/api';
 
 export default function DrivesPage() {
     const { user } = useAuthStore();
+    const queryClient = useQueryClient();
     const isAdmin = ['SUPER_ADMIN', 'DEPARTMENT_ADMIN'].includes(user?.role || '');
+    const [showModal, setShowModal] = useState(false);
+    
+    // Form state
+    const [companyId, setCompanyId] = useState('');
+    const [date, setDate] = useState('');
 
     const { data: drives = [], isLoading } = useQuery({
         queryKey: ['placement-drives'],
         queryFn: () => placementApi.getDrives(),
     });
+
+    const { data: companies = [] } = useQuery({
+        queryKey: ['placement-companies'],
+        queryFn: () => placementApi.getCompanies(),
+        enabled: isAdmin,
+    });
+
+    const createDriveMutation = useMutation({
+        mutationFn: (data: any) => placementApi.createDrive(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['placement-drives'] });
+            setShowModal(false);
+            setCompanyId('');
+            setDate('');
+            alert('Drive scheduled successfully!');
+        },
+        onError: (err: any) => alert(err.response?.data?.error || err.message)
+    });
+
+    const handleScheduleDrive = (e: React.FormEvent) => {
+        e.preventDefault();
+        createDriveMutation.mutate({
+            companyId: parseInt(companyId),
+            date: new Date(date).toISOString(),
+            status: 'SCHEDULED'
+        });
+    };
 
     const getStatusColor = (status: string) => {
         switch(status?.toUpperCase()) {
@@ -32,14 +66,16 @@ export default function DrivesPage() {
             portalName="Placement Portal"
             basePath="/dashboard/placement"
         >
-            <div className="space-y-6">
+            <div className="space-y-6 relative">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900">Placement Drives</h1>
                         <p className="text-slate-500">Upcoming and ongoing campus recruitment drives</p>
                     </div>
                     {isAdmin && (
-                        <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm">
+                        <button 
+                            onClick={() => setShowModal(true)}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm">
                             Schedule Drive
                         </button>
                     )}
@@ -87,7 +123,9 @@ export default function DrivesPage() {
                                             <p className="text-sm font-medium text-slate-900">{drive.rounds?.length || 0} Rounds</p>
                                             <p className="text-xs text-slate-500">Scheduled</p>
                                         </div>
-                                        <button className="p-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
+                                        <button 
+                                            onClick={() => alert(`Drive details for ${drive.company?.name}\nFeature coming soon.`)}
+                                            className="p-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                                             <ArrowRight className="w-5 h-5" />
                                         </button>
                                     </div>
@@ -97,6 +135,39 @@ export default function DrivesPage() {
                     </div>
                 )}
             </div>
+
+            {/* Schedule Drive Modal */}
+            {showModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                    <Card className="w-full max-w-md p-6 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-900">Schedule Drive</h2>
+                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleScheduleDrive} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+                                <select required value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Select a company</option>
+                                    {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Drive Date</label>
+                                <input required type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <div className="pt-4 flex justify-end gap-3">
+                                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Cancel</button>
+                                <button type="submit" disabled={createDriveMutation.isPending} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium disabled:opacity-50">
+                                    {createDriveMutation.isPending ? 'Scheduling...' : 'Schedule Drive'}
+                                </button>
+                            </div>
+                        </form>
+                    </Card>
+                </div>
+            )}
         </DashboardShell>
     );
 }
