@@ -50,3 +50,17 @@ Date: 2026-10-09
 - Super Admin Academic Terms shows the active QA Test Term 2026. Creating another term is disabled until the active term is closed; closing a term is separate from advancing Batch 2026 from Semester 1.
 - The deployed FYC screen initially showed batches/departments from outside the testing tenant. The tenant-scoped fix is now live: after the Render service restarted on the pushed build, the FYC page shows only Batch 2026 and QA Computer Science from the testing tenant. Automated tenant-isolation tests pass.
 - Teacher and clerk dashboard sign-ins remain unverified because their passwords were not included with the other test-role credentials.
+
+## Extended live workflow sweep
+
+- Reviewed the available Super Admin, HOD, COE, Admissions Admin, FYC, Student, and Parent dashboards in the testing tenant. Earlier route sweeps covered their linked pages and empty states, including sections, course allocation, marks/results, admissions, FYC cycle allocation, student records, parent attendance/marks, No-Due queues, audit logs, and PlacePro analytics.
+- PlacePro was exercised end to end in the live testing tenant: created `QA E2E Test Company 2026-10-09`, posted `QA E2E Test Role (Testing Only)`, approved the job as HOD, then signed in as the QA student and applied. The student application page showed the APPLIED record; the HOD applications page showed the same record. The HOD table rendered the student as `Unknown` because the UI read the wrong response shape; corrected the display to use the returned student's `name`. This code change still needs a deployment and live retest.
+- The live section-assignment dialog was empty, but claimed all students in the batch were already assigned. Because the result is department-and-batch scoped, corrected that misleading message in both HOD section screens. This code change still needs a deployment and live retest.
+- Production client build passed after those two UI fixes. Earlier backend verification passed the TypeScript build and 124 server tests; No-Due Super Admin queue and tenant-scoped FYC results were verified after deployment.
+
+## Remaining verification / constraints
+
+- This is a broad live smoke and key-workflow test, not a claim that every button and every possible data permutation in every route is certified. Empty records prevent exercising student section allocation, class attendance entry, assessments/marks publication, timetables, and the full multi-role No-Due approval chain end to end.
+- Teacher and clerk sign-ins remain blocked because test passwords or invitations for those accounts were not provided. The dashboard routes were included in the client production build, but their role-specific live actions are unverified. The company-user dashboard is also unverified because there is no PLACEMENT_COMPANY login; the HOD company/job creation and student application path did pass.
+- No-Due payment cannot be completed without a configured payment provider and verified callback. FYC, admissions, and parent/student main paths were live-tested; service/payment provider behavior and every low-level control remain outside the verified scope.
+- The most recent two UI fixes have not yet been pushed/deployed or rechecked in production. Deployment checks from the local shell were blocked by this environment's restricted DNS; GitHub Actions is the CI source of truth once pushed.

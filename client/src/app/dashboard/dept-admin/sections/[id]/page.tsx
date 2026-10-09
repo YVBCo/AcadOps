@@ -362,7 +362,7 @@ export default function SectionDetailPage() {
                                     <Users className="h-12 w-12 text-neutral-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-medium text-neutral-900 mb-2">No unassigned students</h3>
                                     <p className="text-neutral-500">
-                                        All students in this batch are already assigned to sections
+                                        No unassigned students are available for this department and batch.
                                     </p>
                                 </div>
                             ) : (

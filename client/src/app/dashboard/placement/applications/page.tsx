@@ -106,7 +106,7 @@ export default function ApplicationsPage() {
                                         <tr key={app.id} className="hover:bg-slate-50/50">
                                             {!isStudent && (
                                                 <td className="p-4 font-medium text-slate-900">
-                                                    {app.student?.user?.name || 'Unknown'}
+                                                    {app.student?.name || 'Unknown'}
                                                 </td>
                                             )}
                                             <td className="p-4 font-medium text-slate-900">
@@ -127,7 +127,7 @@ export default function ApplicationsPage() {
                                             {!isStudent && (
                                                 <td className="p-4">
                                                     {isCompany ? (
-                                                        <select aria-label={`Update status for ${app.student?.user?.name || 'student'}`} value={app.status} disabled={updateStatus.isPending} onChange={event => updateStatus.mutate({ id: app.id, status: event.target.value })} className="rounded-md border border-slate-300 px-2 py-1 text-sm">
+                                                        <select aria-label={`Update status for ${app.student?.name || 'student'}`} value={app.status} disabled={updateStatus.isPending} onChange={event => updateStatus.mutate({ id: app.id, status: event.target.value })} className="rounded-md border border-slate-300 px-2 py-1 text-sm">
                                                             {['APPLIED', 'SHORTLISTED', 'ON_HOLD', 'SELECTED', 'REJECTED'].map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
                                                         </select>
                                                     ) : <span className="text-sm text-slate-400">Read only</span>}
