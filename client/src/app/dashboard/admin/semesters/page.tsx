@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { batchApi, courseApi } from '@/lib/api';
-import { Calendar, Users, GraduationCap, ArrowRight, BookOpen, ChevronRight, AlertTriangle } from 'lucide-react';
+import { batchApi, courseApi, semesterApi } from '@/lib/api';
+import { Calendar, Users, GraduationCap, ArrowRight, BookOpen, ChevronRight, AlertTriangle, Plus, CalendarDays, LockKeyhole } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface Batch {
     id: number;
@@ -19,8 +20,21 @@ interface Batch {
     };
 }
 
+interface AcademicSemester {
+    id: number;
+    name: string;
+    startDate: string;
+    endDate: string;
+    status: 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+    _count?: { subjects: number; students: number };
+}
+
 export default function SemestersPage() {
     const queryClient = useQueryClient();
+    const [showTermForm, setShowTermForm] = useState(false);
+    const [termName, setTermName] = useState('');
+    const [termStartDate, setTermStartDate] = useState('');
+    const [termEndDate, setTermEndDate] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
     const [progressResult, setProgressResult] = useState<any>(null);
@@ -36,6 +50,43 @@ export default function SemestersPage() {
         queryFn: () => courseApi.getMaxSemesters(),
     });
     const maxSemesters = semesterConfig?.maxSemesters || 8;
+
+    const { data: academicSemesters = [], isLoading: semestersLoading } = useQuery<AcademicSemester[]>({
+        queryKey: ['semesters'],
+        queryFn: () => semesterApi.getAll(),
+    });
+
+    const activeAcademicSemester = academicSemesters.find((semester) => semester.status === 'ACTIVE');
+
+    const createTermMutation = useMutation({
+        mutationFn: () => semesterApi.create({
+            name: termName.trim(),
+            startDate: termStartDate,
+            endDate: termEndDate,
+        }),
+        onSuccess: (semester: AcademicSemester) => {
+            queryClient.invalidateQueries({ queryKey: ['semesters'] });
+            setShowTermForm(false);
+            setTermName('');
+            setTermStartDate('');
+            setTermEndDate('');
+            toast.success(`${semester.name} created and activated`);
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.error || 'Could not create the academic semester');
+        },
+    });
+
+    const closeTermMutation = useMutation({
+        mutationFn: (semester: AcademicSemester) => semesterApi.close(semester.id),
+        onSuccess: (_result, semester) => {
+            queryClient.invalidateQueries({ queryKey: ['semesters'] });
+            toast.success(`${semester.name} closed`);
+        },
+        onError: (error: any) => {
+            toast.error(error?.response?.data?.error || 'Could not close the academic semester');
+        },
+    });
 
     const progressMutation = useMutation({
         mutationFn: (batchId: number) => batchApi.progressSemester(batchId),
@@ -104,17 +155,142 @@ export default function SemestersPage() {
                 </p>
             </div>
 
+            {/* Academic calendar terms are separate from batch semester progression. */}
+            <section className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm md:p-6" aria-labelledby="academic-terms-heading">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <CalendarDays className="h-5 w-5 text-indigo-600" />
+                            <h2 id="academic-terms-heading" className="text-lg font-semibold text-neutral-900">Academic Terms</h2>
+                        </div>
+                        <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+                            Create the dated term that courses, subjects, marks, and timetables belong to. This is separate from moving a batch from Semester 1 to Semester 2.
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        onClick={() => setShowTermForm((open) => !open)}
+                        disabled={!!activeAcademicSemester || semestersLoading}
+                        leftIcon={Plus}
+                        className="w-full shrink-0 sm:w-auto"
+                        title={activeAcademicSemester ? 'Close the current term before creating the next one' : undefined}
+                    >
+                        Create Academic Term
+                    </Button>
+                </div>
+
+                {activeAcademicSemester && (
+                    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm text-amber-900">
+                            <strong>{activeAcademicSemester.name}</strong> is active. Close it before creating the next term. Closing a term does not advance any batch.
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            leftIcon={LockKeyhole}
+                            isLoading={closeTermMutation.isPending}
+                            onClick={() => {
+                                if (window.confirm(`Close ${activeAcademicSemester.name}? This stops operations that require an active academic term.`)) {
+                                    closeTermMutation.mutate(activeAcademicSemester);
+                                }
+                            }}
+                            className="shrink-0"
+                        >
+                            Close Term
+                        </Button>
+                    </div>
+                )}
+
+                {showTermForm && !activeAcademicSemester && (
+                    <form
+                        className="mt-5 grid grid-cols-1 gap-4 rounded-xl bg-neutral-50 p-4 md:grid-cols-4 md:items-end"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            if (termStartDate >= termEndDate) {
+                                toast.error('End date must be after the start date');
+                                return;
+                            }
+                            createTermMutation.mutate();
+                        }}
+                    >
+                        <label className="block text-sm font-medium text-neutral-700">
+                            Term name
+                            <input
+                                className="input mt-1"
+                                value={termName}
+                                onChange={(event) => setTermName(event.target.value)}
+                                placeholder="e.g. Odd Semester 2026–27"
+                                minLength={2}
+                                required
+                            />
+                        </label>
+                        <label className="block text-sm font-medium text-neutral-700">
+                            Start date
+                            <input className="input mt-1" type="date" value={termStartDate} onChange={(event) => setTermStartDate(event.target.value)} required />
+                        </label>
+                        <label className="block text-sm font-medium text-neutral-700">
+                            End date
+                            <input className="input mt-1" type="date" value={termEndDate} onChange={(event) => setTermEndDate(event.target.value)} required min={termStartDate || undefined} />
+                        </label>
+                        <div className="flex gap-2">
+                            <Button type="submit" isLoading={createTermMutation.isPending} className="flex-1">Create active term</Button>
+                            <Button type="button" variant="ghost" onClick={() => setShowTermForm(false)}>Cancel</Button>
+                        </div>
+                        <p className="text-xs text-neutral-500 md:col-span-4">The new term becomes active immediately. Only one active term is allowed for this institution.</p>
+                    </form>
+                )}
+
+                <div className="mt-5">
+                    {semestersLoading ? (
+                        <p className="text-sm text-neutral-500">Loading academic terms…</p>
+                    ) : academicSemesters.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500">No academic terms yet. Create the first term to use it for subjects, marks, and timetables.</p>
+                    ) : (
+                        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+                            <table className="w-full min-w-[560px] text-left text-sm">
+                                <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                                    <tr>
+                                        <th className="px-4 py-3">Term</th>
+                                        <th className="px-4 py-3">Dates</th>
+                                        <th className="px-4 py-3">Status</th>
+                                        <th className="px-4 py-3">Subjects</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-100">
+                                    {academicSemesters.map((semester) => (
+                                        <tr key={semester.id}>
+                                            <td className="px-4 py-3 font-medium text-neutral-900">{semester.name}</td>
+                                            <td className="px-4 py-3 text-neutral-600">{new Date(semester.startDate).toLocaleDateString()} – {new Date(semester.endDate).toLocaleDateString()}</td>
+                                            <td className="px-4 py-3"><Badge variant={semester.status === 'ACTIVE' ? 'success' : semester.status === 'CLOSED' ? 'neutral' : 'warning'}>{semester.status}</Badge></td>
+                                            <td className="px-4 py-3 text-neutral-600">{semester._count?.subjects ?? 0}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </section>
+
             {/* Semester Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {semesterSlots.map((semNum) => {
-                    // Find if any active (non-graduated) batch is currently in this semester
-                    const currentBatch = activeBatches.find((b: Batch) => b.currentSemester === semNum);
+                    // Render every active batch in this semester; cohorts may progress together.
+                    const currentBatches = activeBatches.filter((b: Batch) => b.currentSemester === semNum);
 
-                    return (
+                    return currentBatches.length > 0 ? currentBatches.map((batch: Batch) => (
                         <SemesterCard
-                            key={semNum}
+                            key={batch.id}
                             semesterNumber={semNum}
-                            batch={currentBatch}
+                            batch={batch}
+                            onEndSemester={handleEndSemester}
+                            maxSemesters={maxSemesters}
+                        />
+                    )) : (
+                        <SemesterCard
+                            key={`vacant-${semNum}`}
+                            semesterNumber={semNum}
                             onEndSemester={handleEndSemester}
                             maxSemesters={maxSemesters}
                         />
@@ -352,5 +528,3 @@ function SemesterCard({ semesterNumber, batch, onEndSemester, maxSemesters }: {
         </div>
     );
 }
-
-

@@ -12,6 +12,13 @@ class SemesterService {
             throw new Error('Start date must be before end date');
         }
 
+        // The tenant dashboard and subject workflows assume one active
+        // academic term at a time. Close the current term before creating the next.
+        const activeSemester = await semesterRepository.findActive(data.tenantId);
+        if (activeSemester) {
+            throw new Error(`Close the active semester "${activeSemester.name}" before creating a new one`);
+        }
+
         const semester = await semesterRepository.create(data);
 
         // Audit log

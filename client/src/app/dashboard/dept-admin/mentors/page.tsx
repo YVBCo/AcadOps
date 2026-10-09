@@ -321,7 +321,7 @@ export default function MentorsPage() {
                                         <button
                                             onClick={() => expireMutation.mutate(student.assignmentId)}
                                             disabled={expireMutation.isPending}
-                                            className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                            className="p-1 text-slate-400 hover:text-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-all"
                                             title="Remove assignment"
                                         >
                                             <X className="w-4 h-4" />

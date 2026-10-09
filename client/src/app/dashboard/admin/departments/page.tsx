@@ -228,12 +228,13 @@ export default function DepartmentsPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredDepartments.map((dept: Department) => (
-                        <Card key={dept.id} className="relative group hover:shadow-lg transition-shadow">
+                        <Card key={dept.id} className="relative group pb-14 md:pb-6 hover:shadow-lg transition-shadow">
                             {/* Actions */}
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity z-10">
                                 <button
                                     onClick={() => openEditModal(dept)}
                                     className="p-2 rounded-lg bg-neutral-100 hover:bg-primary-100 text-neutral-600 hover:text-primary-600"
+                                    aria-label={`Edit ${dept.name}`}
                                 >
                                     <Pencil className="h-4 w-4" />
                                 </button>
@@ -241,6 +242,7 @@ export default function DepartmentsPage() {
                                     onClick={() => handleDelete(dept.id)}
                                     className="p-2 rounded-lg bg-neutral-100 hover:bg-red-100 text-neutral-600 hover:text-red-600"
                                     title="Delete"
+                                    aria-label={`Delete ${dept.name}`}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </button>
@@ -250,7 +252,7 @@ export default function DepartmentsPage() {
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute bottom-4 right-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity"
                                 onClick={() => openAssignAdminModal(dept)}
                             >
                                 Assign Admin

@@ -182,7 +182,7 @@ export default function COEClerksPage() {
                     {filteredClerks.map((clerk: Clerk) => (
                         <Card key={clerk.id} className="p-6 relative group">
                             {/* Actions */}
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity z-10">
                                 <button
                                     onClick={() => handleDelete(clerk)}
                                     className="p-2 rounded-lg hover:bg-red-100 text-neutral-400 hover:text-red-600"

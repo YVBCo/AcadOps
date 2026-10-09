@@ -285,16 +285,18 @@ export default function CoursesPage() {
                     ).map((course: Course) => (
                         <Card key={course.id} className="relative group hover:shadow-lg transition-shadow">
                             {canManage && (
-                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity z-10">
                                     <button
                                         onClick={() => openEditModal(course)}
                                         className="p-2 rounded-lg bg-neutral-100 hover:bg-blue-100 text-neutral-600 hover:text-blue-600"
+                                        aria-label={`Edit ${course.name}`}
                                     >
                                         <Pencil className="h-4 w-4" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(course.id)}
                                         className="p-2 rounded-lg bg-neutral-100 hover:bg-red-100 text-neutral-600 hover:text-red-600"
+                                        aria-label={`Delete ${course.name}`}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </button>
