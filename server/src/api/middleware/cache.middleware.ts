@@ -39,7 +39,8 @@ setInterval(() => {
 /**
  * In-memory response cache middleware.
  * Caches GET responses for the specified TTL (in seconds).
- * Cache key = URL + user's tenantId (tenant-scoped).
+ * Cache keys use the same `api:<tenantId>:<URL>` format accepted by
+ * invalidateCache so successful mutations invalidate their tenant's reads.
  *
  * Accepts either a plain number or { ttl: number } for convenience:
  *   cacheResponse(60)  OR  cacheResponse({ ttl: 60 })
@@ -53,7 +54,7 @@ export function cacheResponse(options: number | { ttl: number } = 60) {
         }
 
         const tenantId = (req as any).user?.tenantId || 'anon';
-        const cacheKey = `${tenantId}:${req.originalUrl}`;
+        const cacheKey = `api:${tenantId}:${req.originalUrl}`;
         const cached = memoryCache.get(cacheKey);
 
         if (cached && Date.now() - cached.timestamp < cached.ttl) {
@@ -83,8 +84,9 @@ export function cacheResponse(options: number | { ttl: number } = 60) {
  * Call after mutations (POST/PUT/DELETE) to clear stale data.
  */
 export function invalidateCache(pattern: string) {
+    const matcher = new RegExp(`^${pattern.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
     for (const key of memoryCache.keys()) {
-        if (key.includes(pattern)) {
+        if (matcher.test(key)) {
             memoryCache.delete(key);
         }
     }
