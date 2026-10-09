@@ -7,9 +7,10 @@ import { z } from 'zod';
 
 const router = Router();
 
-router.get('/my-students', authenticate, requireRole('TEACHER'), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/my-students', authenticate, requireRole('TEACHER', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const enrollments = await nodueService.getEnrollmentsForFaculty(req.tenantId!, req.user!.userId);
+        const teacherId = req.user!.role === 'TEACHER' ? req.user!.userId : undefined;
+        const enrollments = await nodueService.getEnrollmentsForFaculty(req.tenantId!, teacherId);
         res.json(enrollments);
     } catch (error) {
         next(error);
@@ -20,19 +21,21 @@ const rejectSchema = z.object({
     remarks: z.string().min(1),
 });
 
-router.patch('/:id/clear', authenticate, requireRole('TEACHER'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/clear', authenticate, requireRole('TEACHER', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.COMPLETED });
+        const teacherId = req.user!.role === 'TEACHER' ? req.user!.userId : undefined;
+        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), teacherId, { status: NodueDueStatus.COMPLETED });
         res.json(result);
     } catch (error) {
         next(error);
     }
 });
 
-router.patch('/:id/reject', authenticate, requireRole('TEACHER'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/reject', authenticate, requireRole('TEACHER', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = rejectSchema.parse(req.body);
-        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), req.user!.userId, { status: NodueDueStatus.WAIVED, remarks: data.remarks });
+        const teacherId = req.user!.role === 'TEACHER' ? req.user!.userId : undefined;
+        const result = await nodueService.clearSubject(req.tenantId!, Number(req.params.id), teacherId, { status: NodueDueStatus.WAIVED, remarks: data.remarks });
         res.json(result);
     } catch (error) {
         next(error);

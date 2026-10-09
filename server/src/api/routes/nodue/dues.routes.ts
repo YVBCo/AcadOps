@@ -35,7 +35,7 @@ const createDueSchema = z.object({
     fineAmount: z.number().nonnegative(),
 });
 
-router.post('/', authenticate, requireRole('ACCOUNTS_STAFF', 'CLERK'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', authenticate, requireRole('ACCOUNTS_STAFF', 'CLERK', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = createDueSchema.parse(req.body);
         const student = await prisma.user.findFirst({ where: { id: data.studentId, tenantId: req.tenantId!, role: 'STUDENT' }, select: { id: true } });
@@ -63,7 +63,7 @@ const updateDueSchema = z.object({
     remarks: z.string().optional(),
 });
 
-router.patch('/:id', authenticate, requireRole('ACCOUNTS_STAFF', 'CLERK'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id', authenticate, requireRole('ACCOUNTS_STAFF', 'CLERK', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = updateDueSchema.parse(req.body);
         const result = await nodueService.updateStudentDue(req.tenantId!, Number(req.params.id), data);
@@ -88,7 +88,7 @@ const createLibraryDueSchema = z.object({
     remarks: z.string().trim().max(500).optional(),
 });
 
-router.post('/library', authenticate, requireRole('LIBRARIAN'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/library', authenticate, requireRole('LIBRARIAN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = createLibraryDueSchema.parse(req.body);
         const student = await prisma.user.findFirst({ where: { id: data.studentId, tenantId: req.tenantId!, role: 'STUDENT' }, select: { id: true } });
@@ -108,7 +108,7 @@ router.post('/library', authenticate, requireRole('LIBRARIAN'), async (req: Requ
     }
 });
 
-router.patch('/library/:id', authenticate, requireRole('LIBRARIAN'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/library/:id', authenticate, requireRole('LIBRARIAN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const data = updateDueSchema.parse(req.body);
         const result = await nodueService.updateLibraryDue(req.tenantId!, Number(req.params.id), data);

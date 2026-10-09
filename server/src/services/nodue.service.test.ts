@@ -39,3 +39,43 @@ describe('NoDueService tenant-scoped statistics', () => {
         });
     });
 });
+
+describe('NoDueService faculty review access', () => {
+    beforeEach(() => resetPrismaMock());
+
+    it('allows tenant administrators to list faculty clearances without a teacher filter', async () => {
+        prismaMock.nodueSubjectEnrollment.findMany.mockResolvedValue([]);
+
+        await nodueService.getEnrollmentsForFaculty(14);
+
+        expect(prismaMock.nodueSubjectEnrollment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: { tenantId: 14 },
+        }));
+    });
+
+    it('keeps teacher review limited to their own assignments', async () => {
+        prismaMock.nodueSubjectEnrollment.findMany.mockResolvedValue([]);
+
+        await nodueService.getEnrollmentsForFaculty(14, 72);
+
+        expect(prismaMock.nodueSubjectEnrollment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: { tenantId: 14, teacherId: 72 },
+        }));
+    });
+
+    it('lets tenant administrators review an enrollment while preserving tenant scoping', async () => {
+        prismaMock.nodueSubjectEnrollment.findFirst.mockResolvedValue({ id: 9, studentId: 33, status: 'PENDING' });
+        prismaMock.nodueSubjectEnrollment.update.mockResolvedValue({ id: 9, studentId: 33, status: 'COMPLETED' });
+        prismaMock.nodueClearanceRequest.findFirst.mockResolvedValue({ id: 10, studentId: 33, currentStage: 'FACULTY_REVIEW' });
+        prismaMock.nodueSubjectEnrollment.findMany.mockResolvedValue([]);
+        prismaMock.nodueLibraryDue.findMany.mockResolvedValue([]);
+        prismaMock.nodueStudentDue.findMany.mockResolvedValue([]);
+
+        await nodueService.clearSubject(14, 9, undefined, { status: 'COMPLETED' });
+
+        expect(prismaMock.nodueSubjectEnrollment.findFirst).toHaveBeenCalledWith({
+            where: { id: 9, tenantId: 14 },
+        });
+        expect(prismaMock.nodueSubjectEnrollment.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 9 } }));
+    });
+});

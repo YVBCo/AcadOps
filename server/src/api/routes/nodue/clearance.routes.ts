@@ -61,13 +61,13 @@ router.get('/all', authenticate, requireRole('DEPARTMENT_ADMIN', 'SUPER_ADMIN', 
     }
 });
 
-router.patch('/:id/hod-approve', authenticate, requireRole('DEPARTMENT_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/:id/hod-approve', authenticate, requireRole('DEPARTMENT_ADMIN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const request = await prisma.nodueClearanceRequest.findFirst({
             where: {
                 id: Number(req.params.id),
                 tenantId: req.tenantId!,
-                student: { departmentId: req.user!.departmentId },
+                ...(req.user!.role === 'DEPARTMENT_ADMIN' ? { student: { departmentId: req.user!.departmentId } } : {}),
             },
         });
         if (!request) return res.status(404).json({ error: 'Request not found' });

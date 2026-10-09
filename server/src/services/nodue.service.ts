@@ -62,9 +62,9 @@ class NodueService {
         return updated;
     }
 
-    async getEnrollmentsForFaculty(tenantId: number, teacherId: number) {
+    async getEnrollmentsForFaculty(tenantId: number, teacherId?: number) {
         return prisma.nodueSubjectEnrollment.findMany({
-            where: { tenantId, teacherId },
+            where: { tenantId, ...(teacherId !== undefined ? { teacherId } : {}) },
             include: {
                 student: { include: { studentProfile: { select: { rollNumber: true } } } },
                 subject: { select: { id: true, course: { select: { name: true, code: true } } } }
@@ -72,9 +72,9 @@ class NodueService {
         });
     }
 
-    async clearSubject(tenantId: number, enrollmentId: number, teacherId: number, data: { status: NodueDueStatus, remarks?: string }) {
+    async clearSubject(tenantId: number, enrollmentId: number, teacherId: number | undefined, data: { status: NodueDueStatus, remarks?: string }) {
         const enrollment = await prisma.nodueSubjectEnrollment.findFirst({
-            where: { id: enrollmentId, tenantId, teacherId },
+            where: { id: enrollmentId, tenantId, ...(teacherId !== undefined ? { teacherId } : {}) },
         });
 
         if (!enrollment) throw new Error('Enrollment not found or unauthorized');
