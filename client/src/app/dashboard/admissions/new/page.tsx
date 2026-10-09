@@ -57,7 +57,7 @@ export default function NewAdmissionPage() {
     const downloadAfterSave = useRef(false);
 
     // ─── Fetch form config dynamically ──────────────────────────
-    const { data: formConfig, isLoading: configLoading } = useQuery<FormConfig>({
+    const { data: formConfig, isLoading: configLoading, isError: configError, refetch: refetchConfig } = useQuery<FormConfig>({
         queryKey: ['admission-form-config'],
         queryFn: () => admissionsApi.getFormConfig(),
     });
@@ -472,6 +472,18 @@ export default function NewAdmissionPage() {
                 <div className="text-center space-y-3">
                     <Loader2 className="w-8 h-8 text-sky-500 animate-spin mx-auto" />
                     <p className="text-sm text-slate-500">Loading form configuration...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (configError) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-3">
+                    <p className="text-lg font-semibold text-slate-700">Could not load the admission form</p>
+                    <p className="text-sm text-slate-500">Check your connection and try again. If the problem continues, contact your admissions administrator.</p>
+                    <Button onClick={() => refetchConfig()}>Try Again</Button>
                 </div>
             </div>
         );

@@ -132,7 +132,9 @@ const createAdmissionSchema = z.object({
 // ============================================
 
 // GET /api/admissions/form-config - Get form config for current tenant
-router.get('/form-config', authenticate, admissionsAdminOnly, cacheResponse({ ttl: CacheDurations.REFERENCE_DATA }), async (req: Request, res: Response, next: NextFunction) => {
+// Admissions clerks need the configured fields to enter an application. Keep
+// updates and logo uploads restricted to admissions admins below.
+router.get('/form-config', authenticate, admissionsStaff, cacheResponse({ ttl: CacheDurations.REFERENCE_DATA }), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const config = await formConfigService.getConfig(req.user!.tenantId);
         res.json(config);
@@ -867,4 +869,3 @@ router.post('/bulk-upload/confirm', authenticate, admissionsAdminOnly, async (re
 });
 
 export default router;
-
