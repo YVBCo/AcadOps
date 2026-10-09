@@ -15,7 +15,8 @@ import {
     GraduationCap,
     User,
     MessageSquare,
-    Calendar
+    Calendar,
+    FileCheck2,
 } from 'lucide-react';
 import { Card, StatCard } from '@/components/ui/card';
 import { QuickActionCard, QuickActionsGrid } from '@/components/layout/QuickActionCard';
@@ -148,6 +149,7 @@ export default function TeacherDashboard() {
                 <QuickActionCard href="/dashboard/teacher/mentorship" icon={Users} label="Mentorship" subtitle="Manage mentee students" iconColor="text-violet-600" iconBgColor="bg-violet-50" />
                 <QuickActionCard href="/dashboard/teacher/courses" icon={Layers} label="My Subjects" subtitle="View assigned subjects" iconColor="text-amber-600" iconBgColor="bg-amber-50" />
                 <QuickActionCard href="/dashboard/teacher/timetable" icon={Calendar} label="My Timetable" subtitle="View weekly schedule" iconColor="text-fuchsia-600" iconBgColor="bg-fuchsia-50" />
+                <QuickActionCard href="/dashboard/nodue/faculty" icon={FileCheck2} label="No-Due Review" subtitle="Clear student subjects" iconColor="text-orange-600" iconBgColor="bg-orange-50" />
             </QuickActionsGrid>
 
             {/* Parent Chat — Featured Card */}

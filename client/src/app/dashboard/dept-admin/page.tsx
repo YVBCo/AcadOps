@@ -23,7 +23,9 @@ import {
     UserCheck,
     BarChart3,
     ScrollText,
-    MessageSquare
+    MessageSquare,
+    Briefcase,
+    FileCheck2,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -186,6 +188,8 @@ export default function DeptAdminDashboard() {
                 <QuickActionCard href="/dashboard/dept-admin/calendar" icon={Calendar} label="Academic Calendar" subtitle="Holidays & overrides" iconColor="text-red-600" iconBgColor="bg-red-50" />
                 <QuickActionCard href="/dashboard/dept-admin/classrooms" icon={Building} label="Classrooms" subtitle="Room management" iconColor="text-sky-600" iconBgColor="bg-sky-50" />
                 <QuickActionCard href="/dashboard/dept-admin/audit-logs" icon={ScrollText} label="Audit Logs" subtitle="View activity trail" iconColor="text-neutral-600" iconBgColor="bg-neutral-100" />
+                <QuickActionCard href="/dashboard/nodue/hod" icon={FileCheck2} label="No-Due Approvals" subtitle="HOD clearance approvals" iconColor="text-orange-600" iconBgColor="bg-orange-50" />
+                <QuickActionCard href="/dashboard/placement" icon={Briefcase} label="PlacePro" subtitle="Placement & recruitment" iconColor="text-violet-600" iconBgColor="bg-violet-50" />
             </QuickActionsGrid>
 
             {/* Recent Activity */}

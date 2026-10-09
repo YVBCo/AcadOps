@@ -12,7 +12,9 @@ import {
     User,
     Building,
     Users,
-    GraduationCap
+    GraduationCap,
+    Briefcase,
+    FileCheck2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { QuickActionCard, QuickActionsGrid } from '@/components/layout/QuickActionCard';
@@ -191,6 +193,8 @@ export default function StudentDashboard() {
                 <QuickActionCard href="/dashboard/student/attendance" icon={Calendar} label="Attendance" subtitle="View attendance records" iconColor="text-amber-600" iconBgColor="bg-amber-50" />
                 <QuickActionCard href="/dashboard/student/results" icon={Award} label="Results" subtitle="View published results" iconColor="text-emerald-600" iconBgColor="bg-emerald-50" />
                 <QuickActionCard href="/dashboard/student/history" icon={Building} label="Academic History" subtitle="Complete 4-year record" iconColor="text-rose-600" iconBgColor="bg-rose-50" />
+                <QuickActionCard href="/dashboard/nodue" icon={FileCheck2} label="No-Due Portal" subtitle="Clearance & dues status" iconColor="text-orange-600" iconBgColor="bg-orange-50" />
+                <QuickActionCard href="/dashboard/placement" icon={Briefcase} label="PlacePro" subtitle="Jobs & placement portal" iconColor="text-violet-600" iconBgColor="bg-violet-50" />
             </QuickActionsGrid>
 
 
