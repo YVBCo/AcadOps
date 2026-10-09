@@ -5,13 +5,14 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get all first year (semester 1-2) students grouped by batch and department
      */
-    async getFirstYearStudents(filters?: {
+    async getFirstYearStudents(filters: {
         batchId?: number;
         semester?: number;
         departmentId?: number;
-    }) {
+    } | undefined, tenantId: number) {
         const where: Prisma.StudentProfileWhereInput = {
             currentSemester: filters?.semester || { in: [1, 2] },
+            user: { tenantId },
             ...(filters?.batchId && { batchId: filters.batchId }),
             ...(filters?.departmentId && { optedDepartmentId: filters.departmentId }),
         };
@@ -59,9 +60,10 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get all active batches with first year students
      */
-    async getActiveBatches() {
+    async getActiveBatches(tenantId: number) {
         return await prisma.batch.findMany({
             where: {
+                tenantId,
                 isGraduated: false,
                 currentSemester: { in: [1, 2, 3, 4] }, // Include batches in early years
             },
@@ -83,8 +85,9 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get all departments
      */
-    async getAllDepartments() {
+    async getAllDepartments(tenantId: number) {
         return await prisma.department.findMany({
+            where: { tenantId },
             select: {
                 id: true,
                 name: true,
@@ -98,9 +101,10 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get cycle departments (Physics and Chemistry)
      */
-    async getCycleDepartments() {
+    async getCycleDepartments(tenantId: number) {
         return await prisma.department.findMany({
             where: {
+                tenantId,
                 isCycleDepartment: true,
             },
             select: {
@@ -114,13 +118,14 @@ export class FirstYearCoordinatorRepository {
     /**
      * Check if a department already has a cycle allocation for a batch
      */
-    async getCycleAllocation(batchId: number, optedDepartmentId: number) {
-        return await prisma.cycleDepartmentAllocation.findUnique({
+    async getCycleAllocation(batchId: number, optedDepartmentId: number, tenantId: number) {
+        return await prisma.cycleDepartmentAllocation.findFirst({
             where: {
-                batchId_optedDepartmentId: {
-                    batchId,
-                    optedDepartmentId,
-                },
+                batchId,
+                optedDepartmentId,
+                batch: { tenantId },
+                optedDepartment: { tenantId },
+                semester1Cycle: { tenantId },
             },
             include: {
                 batch: true,
@@ -139,9 +144,14 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get all cycle allocations for a batch
      */
-    async getBatchAllocations(batchId: number) {
+    async getBatchAllocations(batchId: number, tenantId: number) {
         return await prisma.cycleDepartmentAllocation.findMany({
-            where: { batchId },
+            where: {
+                batchId,
+                batch: { tenantId },
+                optedDepartment: { tenantId },
+                semester1Cycle: { tenantId },
+            },
             include: {
                 optedDepartment: true,
                 semester1Cycle: true,
@@ -181,13 +191,15 @@ export class FirstYearCoordinatorRepository {
         batchId: number,
         optedDepartmentId: number,
         semester: number,
-        cycleDepartmentId: number
+        cycleDepartmentId: number,
+        tenantId: number
     ) {
         return await prisma.studentProfile.updateMany({
             where: {
                 batchId,
                 optedDepartmentId,
                 currentSemester: semester,
+                user: { tenantId },
             },
             data: {
                 cycleDepartmentId,
@@ -198,13 +210,14 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get student count by department and batch
      */
-    async getStudentCountsByDepartment(batchId: number) {
+    async getStudentCountsByDepartment(batchId: number, tenantId: number) {
         const students = await prisma.studentProfile.groupBy({
             by: ['optedDepartmentId', 'currentSemester'],
             where: {
                 batchId,
                 currentSemester: { in: [1, 2] },
                 optedDepartmentId: { not: null },
+                user: { tenantId },
             },
             _count: true,
         });
@@ -215,9 +228,25 @@ export class FirstYearCoordinatorRepository {
     /**
      * Get opposite cycle department (Physics <-> Chemistry)
      */
-    async getOppositeCycleDepartment(cycleDepartmentId: number) {
-        const cycleDepts = await this.getCycleDepartments();
+    async getOppositeCycleDepartment(cycleDepartmentId: number, tenantId: number) {
+        const cycleDepts = await this.getCycleDepartments(tenantId);
         return cycleDepts.find((dept) => dept.id !== cycleDepartmentId) || null;
+    }
+
+    /** Validate every referenced record before changing a batch's cycle allocation. */
+    async hasTenantAllocationReferences(
+        batchId: number,
+        optedDepartmentId: number,
+        cycleDepartmentId: number,
+        tenantId: number
+    ) {
+        const [batch, optedDepartment, cycleDepartment] = await Promise.all([
+            prisma.batch.findFirst({ where: { id: batchId, tenantId }, select: { id: true } }),
+            prisma.department.findFirst({ where: { id: optedDepartmentId, tenantId, isCycleDepartment: false }, select: { id: true } }),
+            prisma.department.findFirst({ where: { id: cycleDepartmentId, tenantId, isCycleDepartment: true }, select: { id: true } }),
+        ]);
+
+        return Boolean(batch && optedDepartment && cycleDepartment);
     }
 }
 

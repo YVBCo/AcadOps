@@ -42,10 +42,11 @@ Date: 2026-10-09
 
 ## Live end-to-end retest
 
-- Re-ran the server suite after the admission-number change: 16 test files and 117 tests passed.
+- Re-ran the server suite after the FYC tenant-isolation change: 17 test files and 121 tests passed. The server TypeScript build passed.
 - Closed admissions for the synthetic QA Computer Science department. The deployed service allocated `QACS001` and confirmed creation of one parent account. The generated student and parent accounts both signed in successfully; the parent dashboard showed the linked QA student, and its attendance and marks pages loaded their empty states correctly.
 - The student submitted a synthetic No-Due clearance request successfully. The HOD approvals page loaded and correctly showed no requests at the HOD stage because the new request is still at faculty review. A complete multi-role clearance chain remains unverified.
 - Student PlacePro landing, jobs, and profile pages loaded. The jobs view correctly showed an empty state because the testing tenant has no active jobs.
 - HOD saw QA101 in the Chemistry course catalog, and teacher assignment succeeded for the existing QA Teacher. The QA student is in the separate QA Computer Science department, so QA101 is not that student's course. The student's profile currently has no program or section assignment; the test tenant needs a matching course and section assignment before that student can show enrolled courses.
 - Super Admin Academic Terms shows the active QA Test Term 2026. Creating another term is disabled until the active term is closed; closing a term is separate from advancing Batch 2026 from Semester 1.
+- The deployed FYC screen showed batches/students from outside the testing tenant. FYC read queries and cycle-allocation writes now require the authenticated tenant, and allocation references are validated before changes. Automated tenant-isolation tests pass; this fix still needs a deployment and live retest.
 - Teacher and clerk dashboard sign-ins remain unverified because their passwords were not included with the other test-role credentials.

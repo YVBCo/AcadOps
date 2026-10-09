@@ -49,6 +49,7 @@ const models = [
     'placementCompany', 'placementJob', 'placementStudentProfile', 'placementDrive',
     'placementApplication', 'placementCv', 'placementDeclaration', 'placementOfferLetter', 'placementRound',
     'nodueClearanceRequest', 'nodueSubjectEnrollment', 'nodueLibraryDue', 'nodueStudentDue', 'nodueDue', 'nodueFineCategory',
+    'cycleDepartmentAllocation',
 ] as const;
 
 type PrismaMock = Record<string, Record<string, ReturnType<typeof vi.fn>>> & {

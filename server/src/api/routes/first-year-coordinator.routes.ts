@@ -45,7 +45,7 @@ router.get('/students', async (req: Request, res: Response, next: NextFunction) 
             ...(departmentId && { departmentId: parseIntParam(departmentId as string, 'departmentId') }),
         };
 
-        const students = await firstYearCoordinatorService.getFirstYearStudents(filters);
+        const students = await firstYearCoordinatorService.getFirstYearStudents(filters, req.user!.tenantId);
 
         res.json({
             success: true,
@@ -62,7 +62,7 @@ router.get('/students', async (req: Request, res: Response, next: NextFunction) 
  */
 router.get('/batches', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const batches = await firstYearCoordinatorService.getActiveBatches();
+        const batches = await firstYearCoordinatorService.getActiveBatches(req.user!.tenantId);
         res.json({ success: true, data: batches });
     } catch (error) {
         next(error);
@@ -75,7 +75,7 @@ router.get('/batches', async (req: Request, res: Response, next: NextFunction) =
  */
 router.get('/departments', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const departments = await firstYearCoordinatorService.getAllDepartments();
+        const departments = await firstYearCoordinatorService.getAllDepartments(req.user!.tenantId);
         res.json({ success: true, data: departments });
     } catch (error) {
         next(error);
@@ -88,7 +88,7 @@ router.get('/departments', async (req: Request, res: Response, next: NextFunctio
  */
 router.get('/cycle-departments', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const cycleDepartments = await firstYearCoordinatorService.getCycleDepartments();
+        const cycleDepartments = await firstYearCoordinatorService.getCycleDepartments(req.user!.tenantId);
         res.json({ success: true, data: cycleDepartments });
     } catch (error) {
         next(error);
@@ -102,7 +102,7 @@ router.get('/cycle-departments', async (req: Request, res: Response, next: NextF
 router.get('/allocations/:batchId', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const batchId = parseIntParam(req.params.batchId, 'batchId');
-        const allocations = await firstYearCoordinatorService.getBatchAllocations(batchId);
+        const allocations = await firstYearCoordinatorService.getBatchAllocations(batchId, req.user!.tenantId);
         res.json({ success: true, data: allocations });
     } catch (error) {
         next(error);
@@ -115,7 +115,7 @@ router.get('/allocations/:batchId', async (req: Request, res: Response, next: Ne
  */
 router.get('/summary', async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const summary = await firstYearCoordinatorService.getAllocationSummary();
+        const summary = await firstYearCoordinatorService.getAllocationSummary(req.user!.tenantId);
         res.json({ success: true, data: summary });
     } catch (error) {
         next(error);
@@ -141,7 +141,8 @@ router.post('/allocate-cycle', async (req: Request, res: Response, next: NextFun
             data.batchId,
             data.optedDepartmentId,
             data.semester1CycleId,
-            req.user.userId
+            req.user.userId,
+            req.user.tenantId
         );
 
         res.json({

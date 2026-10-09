@@ -4,12 +4,12 @@ export class FirstYearCoordinatorService {
     /**
      * Get all first year students with grouping by batch and department
      */
-    async getFirstYearStudents(filters?: {
+    async getFirstYearStudents(filters: {
         batchId?: number;
         semester?: number;
         departmentId?: number;
-    }) {
-        const students = await firstYearCoordinatorRepository.getFirstYearStudents(filters);
+    } | undefined, tenantId: number) {
+        const students = await firstYearCoordinatorRepository.getFirstYearStudents(filters, tenantId);
 
         // Group by batch and department
         const grouped = students.reduce((acc, student) => {
@@ -53,30 +53,30 @@ export class FirstYearCoordinatorService {
     /**
      * Get all active batches
      */
-    async getActiveBatches() {
-        return await firstYearCoordinatorRepository.getActiveBatches();
+    async getActiveBatches(tenantId: number) {
+        return await firstYearCoordinatorRepository.getActiveBatches(tenantId);
     }
 
     /**
      * Get all departments
      */
-    async getAllDepartments() {
-        return await firstYearCoordinatorRepository.getAllDepartments();
+    async getAllDepartments(tenantId: number) {
+        return await firstYearCoordinatorRepository.getAllDepartments(tenantId);
     }
 
     /**
      * Get cycle departments (Physics and Chemistry)
      */
-    async getCycleDepartments() {
-        return await firstYearCoordinatorRepository.getCycleDepartments();
+    async getCycleDepartments(tenantId: number) {
+        return await firstYearCoordinatorRepository.getCycleDepartments(tenantId);
     }
 
     /**
      * Get all allocations for a batch
      */
-    async getBatchAllocations(batchId: number) {
-        const allocations = await firstYearCoordinatorRepository.getBatchAllocations(batchId);
-        const studentCounts = await firstYearCoordinatorRepository.getStudentCountsByDepartment(batchId);
+    async getBatchAllocations(batchId: number, tenantId: number) {
+        const allocations = await firstYearCoordinatorRepository.getBatchAllocations(batchId, tenantId);
+        const studentCounts = await firstYearCoordinatorRepository.getStudentCountsByDepartment(batchId, tenantId);
 
         // Merge allocation data with student counts
         const result = allocations.map((allocation) => {
@@ -109,12 +109,24 @@ export class FirstYearCoordinatorService {
         batchId: number,
         optedDepartmentId: number,
         semester1CycleId: number,
-        allocatedBy: number
+        allocatedBy: number,
+        tenantId: number
     ) {
+        const referencesBelongToTenant = await firstYearCoordinatorRepository.hasTenantAllocationReferences(
+            batchId,
+            optedDepartmentId,
+            semester1CycleId,
+            tenantId
+        );
+        if (!referencesBelongToTenant) {
+            throw new Error('Batch and departments must belong to your institution');
+        }
+
         // Check if allocation already exists
         const existingAllocation = await firstYearCoordinatorRepository.getCycleAllocation(
             batchId,
-            optedDepartmentId
+            optedDepartmentId,
+            tenantId
         );
 
         if (existingAllocation && existingAllocation.isLocked) {
@@ -122,7 +134,7 @@ export class FirstYearCoordinatorService {
         }
 
         // Get opposite cycle department for semester 2
-        const semester2Cycle = await firstYearCoordinatorRepository.getOppositeCycleDepartment(semester1CycleId);
+        const semester2Cycle = await firstYearCoordinatorRepository.getOppositeCycleDepartment(semester1CycleId, tenantId);
 
         if (!semester2Cycle) {
             throw new Error('Could not determine opposite cycle department');
@@ -141,7 +153,8 @@ export class FirstYearCoordinatorService {
             batchId,
             optedDepartmentId,
             1,
-            semester1CycleId
+            semester1CycleId,
+            tenantId
         );
 
         // Update all semester 2 students to the opposite cycle
@@ -149,7 +162,8 @@ export class FirstYearCoordinatorService {
             batchId,
             optedDepartmentId,
             2,
-            semester2Cycle.id
+            semester2Cycle.id,
+            tenantId
         );
 
         return {
@@ -163,13 +177,13 @@ export class FirstYearCoordinatorService {
     /**
      * Get allocation summary for dashboard
      */
-    async getAllocationSummary() {
-        const batches = await this.getActiveBatches();
-        const allDepartments = await this.getAllDepartments();
+    async getAllocationSummary(tenantId: number) {
+        const batches = await this.getActiveBatches(tenantId);
+        const allDepartments = await this.getAllDepartments(tenantId);
 
         const summary = await Promise.all(
             batches.map(async (batch) => {
-                const allocations = await this.getBatchAllocations(batch.id);
+                const allocations = await this.getBatchAllocations(batch.id, tenantId);
                 const unallocatedDepts = allDepartments.filter(
                     (dept) => !dept.isCycleDepartment && !allocations.some((a) => a.optedDepartmentId === dept.id)
                 );
