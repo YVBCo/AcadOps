@@ -20,7 +20,9 @@ import {
     CheckSquare,
     BarChart3,
     UserCheck,
-    ScrollText
+    ScrollText,
+    Briefcase,
+    FileCheck2,
 } from 'lucide-react';
 import { StatCard, Card } from '@/components/ui/card';
 import { Badge, SemesterStatusBadge } from '@/components/ui/badge';
@@ -302,6 +304,22 @@ export default function AdminDashboard() {
                     subtitle="View system audit trail"
                     iconColor="text-slate-600"
                     iconBgColor="bg-slate-100"
+                />
+                <QuickActionCard
+                    href="/dashboard/nodue"
+                    icon={FileCheck2}
+                    label="No-Due Portal"
+                    subtitle="Clearance & dues management"
+                    iconColor="text-orange-600"
+                    iconBgColor="bg-orange-50"
+                />
+                <QuickActionCard
+                    href="/dashboard/placement"
+                    icon={Briefcase}
+                    label="PlacePro"
+                    subtitle="Placement & recruitment portal"
+                    iconColor="text-violet-600"
+                    iconBgColor="bg-violet-50"
                 />
             </QuickActionsGrid>
         </div>
