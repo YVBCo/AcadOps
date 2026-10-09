@@ -21,7 +21,7 @@ Date: 2026-10-09
 
 ## End-to-end limits
 
-- Full page-by-page certification of every route is not complete. Live smoke checks covered Super Admin, HOD, COE, First Year Coordinator, Admissions Admin, and Student sessions in the testing tenant. Teacher and clerk accounts still need credentialed login checks.
+- Full page-by-page certification of every route is not complete. Live smoke checks covered Super Admin, HOD, COE, First Year Coordinator, Admissions Admin, Student, and Parent sessions in the testing tenant. Teacher and clerk role sign-ins still need their invitation credentials; the test teacher is present and assigned to QA101, and the COE clerk is present and active.
 - The No-Due payment API currently creates internal orders but does not implement a configured payment provider or signature-verified payment callback. The inactive Pay Now control was removed so the UI does not imply that payment is complete.
 - The checks cover core paths in ERP, No-Due, and PlacePro. They do not certify every page in the wider ERP.
 
@@ -36,6 +36,16 @@ Date: 2026-10-09
 
 - A course code of `1` is rejected by the server's 2–10 character code rule. A valid test course (`QA101`) was created, appeared in COE and HOD views, was locked by COE with the user's approval, and allocated to a test section by HOD.
 - The test tenant initially had no non-cycle department, which left the required branch selector blank. A synthetic QA department was added in that test tenant; the branch then appeared in the admissions form. The form now explains the missing-branch condition instead of showing a blank required field.
-- Admissions approval could not proceed because the API returned a generic duplicate-resource response. Admission-number allocation now checks both admissions and student-profile roll numbers before choosing the next ID. This fix has automated coverage; live approval should be retried after the API deployment.
+- Admissions approval initially returned a generic duplicate-resource response. Admission-number allocation was changed to check globally unique IDs across all tenants, matching the global database constraints. The pushed Render API fix was verified live: the synthetic QA application was approved as `ADM0003`.
 - Added a Super Admin Academic Programs screen so a degree program can be created and linked to a department before section and teacher allocation.
-- The Aadhaar field's original Required setting was restored and saved after synthetic-form testing. No synthetic applicant was approved and no parent account was generated during this test pass.
+- The Aadhaar field's original Required setting was restored and saved after synthetic-form testing.
+
+## Live end-to-end retest
+
+- Re-ran the server suite after the admission-number change: 16 test files and 117 tests passed.
+- Closed admissions for the synthetic QA Computer Science department. The deployed service allocated `QACS001` and confirmed creation of one parent account. The generated student and parent accounts both signed in successfully; the parent dashboard showed the linked QA student, and its attendance and marks pages loaded their empty states correctly.
+- The student submitted a synthetic No-Due clearance request successfully. The HOD approvals page loaded and correctly showed no requests at the HOD stage because the new request is still at faculty review. A complete multi-role clearance chain remains unverified.
+- Student PlacePro landing, jobs, and profile pages loaded. The jobs view correctly showed an empty state because the testing tenant has no active jobs.
+- HOD saw QA101 in the Chemistry course catalog, and teacher assignment succeeded for the existing QA Teacher. The QA student is in the separate QA Computer Science department, so QA101 is not that student's course. The student's profile currently has no program or section assignment; the test tenant needs a matching course and section assignment before that student can show enrolled courses.
+- Super Admin Academic Terms shows the active QA Test Term 2026. Creating another term is disabled until the active term is closed; closing a term is separate from advancing Batch 2026 from Semester 1.
+- Teacher and clerk dashboard sign-ins remain unverified because their passwords were not included with the other test-role credentials.
