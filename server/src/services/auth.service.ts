@@ -125,6 +125,11 @@ class AuthService {
 
     // Login user - supports both email and roll number, scoped by tenant
     async login(data: LoginData, ipAddress?: string, userAgent?: string): Promise<AuthResult> {
+        // Email clients and password managers can include surrounding whitespace
+        // when credentials are copied from the welcome message. Normalize only
+        // the identifier; passwords remain byte-for-byte unchanged.
+        const identifier = data.identifier.trim();
+
         // Resolve tenant first if slug is provided (needed for tenant-scoped email lookup)
         let resolvedTenantId: number | undefined;
         if (data.tenantSlug) {
@@ -141,25 +146,25 @@ class AuthService {
 
         // Find user by email, roll number, or phone
         let user;
-        if (data.identifier.includes('@')) {
+        if (identifier.includes('@')) {
             // Login by email
-            user = await userRepository.findByEmail(data.identifier, resolvedTenantId);
+            user = await userRepository.findByEmail(identifier, resolvedTenantId);
         } else {
-            const cleanIdentifier = data.identifier.replace(/[\s\-\(\)]/g, '');
+            const cleanIdentifier = identifier.replace(/[\s\-\(\)]/g, '');
             // If identifier is purely numeric with 10+ digits, try parent phone FIRST
             // (avoids 3 unnecessary student roll queries for phone-based parent login)
             if (/^\d{10,}$/.test(cleanIdentifier)) {
-                user = await userRepository.findParentByPhone(data.identifier, resolvedTenantId);
+                user = await userRepository.findParentByPhone(identifier, resolvedTenantId);
                 // Fall back to student roll number if not a parent
                 if (!user) {
-                    user = await userRepository.findStudentByRollNumber(data.identifier.toUpperCase(), resolvedTenantId);
+                    user = await userRepository.findStudentByRollNumber(identifier.toUpperCase(), resolvedTenantId);
                 }
             } else {
                 // Non-phone identifier: try student roll number first
-                user = await userRepository.findStudentByRollNumber(data.identifier.toUpperCase(), resolvedTenantId);
+                user = await userRepository.findStudentByRollNumber(identifier.toUpperCase(), resolvedTenantId);
                 // If not found and could be a phone, try parent phone lookup
                 if (!user && /^\d{5,}$/.test(cleanIdentifier)) {
-                    user = await userRepository.findParentByPhone(data.identifier, resolvedTenantId);
+                    user = await userRepository.findParentByPhone(identifier, resolvedTenantId);
                 }
             }
         }
