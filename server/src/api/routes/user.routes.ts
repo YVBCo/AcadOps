@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
 import { UserRole, Prisma } from '@prisma/client';
 import { userService } from '../../services/index.js';
-import { authenticate, adminOnly, superAdminOnly, admissionsStaff, requireRole } from '../middleware/index.js';
+import { authenticate, adminOnly, superAdminOnly, admissionsStaff, requireRole, invalidateCache } from '../middleware/index.js';
 import { parseIntParam, parseOptionalInt } from '../../utils/param-utils.js';
 import { bulkOperationLimiter } from '../middleware/rate-limiters.js';
 
@@ -192,6 +192,11 @@ router.post('/', authenticate, adminOnly, async (req: Request, res: Response, ne
                 currentSemester: data.currentSemester,
                 tenantId: req.user!.tenantId,
             });
+
+            // Student creation changes the batch student counts shown in the
+            // admin and semester dashboards. Drop those tenant-scoped cached
+            // batch responses immediately after the successful write.
+            await invalidateCache(`api:${req.user!.tenantId}:/api/batches*`);
 
             const { passwordHash: _, ...userWithoutPassword } = student;
             res.status(201).json(userWithoutPassword);
@@ -417,6 +422,10 @@ router.post('/bulk-students', authenticate, admissionsStaff, bulkOperationLimite
         }
 
         const result = await userService.createBulkStudents({ ...data, tenantId: req.user!.tenantId }, req.user!.userId);
+
+        if (result.created > 0) {
+            await invalidateCache(`api:${req.user!.tenantId}:/api/batches*`);
+        }
 
         res.status(201).json({
             message: `Successfully created ${result.created} students`,
