@@ -356,6 +356,9 @@ export default function COECoursesPage() {
                                     value={formData.code}
                                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                                     placeholder="e.g., CS201"
+                                    minLength={2}
+                                    maxLength={10}
+                                    helperText="Use 2–10 characters (for example, CS201)."
                                     required
                                 />
                             </div>
