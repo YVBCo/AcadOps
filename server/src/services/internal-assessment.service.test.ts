@@ -45,7 +45,7 @@ describe('internal assessment recalculation', () => {
             totalMarks: 50,
             createdAt: new Date(),
             updatedAt: new Date(),
-        }));
+        });
         vi.mocked(prismaMock.section.findMany).mockResolvedValue([{ id: 30 }] as never);
         vi.mocked(prismaMock.internalMarksDetail.findMany).mockResolvedValue([{
             id: 40,
