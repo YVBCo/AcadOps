@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { admissionsApi, departmentApi } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 import { toast } from 'sonner';
 
 // ─── Types (same as public apply page) ──────────────────────────
@@ -51,6 +52,7 @@ interface FormConfig {
 }
 
 export default function NewAdmissionPage() {
+    const { user } = useAuthStore();
     const router = useRouter();
     const queryClient = useQueryClient();
     const [step, setStep] = useState(0);
@@ -58,13 +60,13 @@ export default function NewAdmissionPage() {
 
     // ─── Fetch form config dynamically ──────────────────────────
     const { data: formConfig, isLoading: configLoading, isError: configError, refetch: refetchConfig } = useQuery<FormConfig>({
-        queryKey: ['admission-form-config'],
+        queryKey: ['admission-form-config', user?.tenantId, user?.id],
         queryFn: () => admissionsApi.getFormConfig(),
     });
 
     // Fetch departments as fallback for branch_select fields
     const { data: departments = [], isLoading: departmentsLoading, isError: departmentsError } = useQuery<{ id: number; name: string; code: string }[]>({
-        queryKey: ['departments-opted'],
+        queryKey: ['departments-opted', user?.tenantId],
         queryFn: () => departmentApi.getOpted(),
     });
 
@@ -280,10 +282,14 @@ export default function NewAdmissionPage() {
                 return (
                     <div key={field.id} className={field.width === 'full' ? 'md:col-span-3' : ''}>
                         <Input
+                            id={field.id}
                             label={`${field.label}${field.required ? ' *' : ''}`}
                             type={field.type}
                             value={value}
                             onChange={e => updateField(field.id, e.target.value)}
+                            onBlur={e => {
+                                if (field.type === 'date') updateField(field.id, e.currentTarget.value);
+                            }}
                             placeholder={field.placeholder || ''}
                             maxLength={field.validation?.maxLength || field.validation?.exactLength}
                             min={field.validation?.minValue}

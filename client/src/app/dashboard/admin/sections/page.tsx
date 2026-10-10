@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { sectionApi, batchApi, studentApi, courseAllocationApi, courseApi } from '@/lib/api';
+import { sectionApi, batchApi, studentApi, courseAllocationApi, courseApi, departmentApi } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { toast } from 'sonner';
 
@@ -83,9 +83,10 @@ interface Teacher {
 export default function SectionsPage() {
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
-    const departmentId = user?.departmentId;
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
     const [selectedBatch, setSelectedBatch] = useState<number | null>(null);
+    const [selectedDepartment, setSelectedDepartment] = useState<number | null>(null);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isCoursesModalOpen, setIsCoursesModalOpen] = useState(false);
@@ -94,22 +95,29 @@ export default function SectionsPage() {
     const [studentsToRemove, setStudentsToRemove] = useState<number[]>([]);
     const [newSectionName, setNewSectionName] = useState('');
 
-    // Fetch batches
+    const departmentId = isSuperAdmin ? selectedDepartment ?? undefined : user?.departmentId;
+
+    // Fetch batches and departments in the active tenant.
     const { data: batches = [] } = useQuery({
-        queryKey: ['batches'],
+        queryKey: ['batches', user?.tenantId, user?.id],
         queryFn: () => batchApi.getAll(),
+    });
+    const { data: departments = [] } = useQuery({
+        queryKey: ['section-departments', user?.tenantId, user?.id],
+        queryFn: () => departmentApi.getAll(),
+        enabled: isSuperAdmin,
     });
 
     // Fetch sections
     const { data: sections = [], isLoading: sectionsLoading } = useQuery({
-        queryKey: ['sections', departmentId, selectedBatch],
+        queryKey: ['sections', user?.tenantId, user?.id, departmentId, selectedBatch],
         queryFn: () => sectionApi.getAll(departmentId || undefined, selectedBatch || undefined),
         enabled: !!departmentId,
     });
 
     // Fetch unassigned students for assignment
     const { data: unassignedStudents = [] } = useQuery({
-        queryKey: ['students', 'unassigned', departmentId, selectedBatch],
+        queryKey: ['students', 'unassigned', user?.tenantId, user?.id, departmentId, selectedBatch],
         queryFn: () => studentApi.getStudents({
             departmentId: departmentId || undefined,
             batchId: selectedBatch || undefined,
@@ -122,7 +130,7 @@ export default function SectionsPage() {
 
     // Fetch students in selected section for viewing
     const { data: sectionStudents = [], isLoading: sectionStudentsLoading } = useQuery({
-        queryKey: ['sectionStudents', selectedSection?.id],
+        queryKey: ['sectionStudents', user?.tenantId, user?.id, selectedSection?.id],
         queryFn: () => sectionApi.getStudents(selectedSection!.id),
         enabled: isViewModalOpen && !!selectedSection,
     });
@@ -133,14 +141,14 @@ export default function SectionsPage() {
 
     // Fetch course allocations for batch
     const { data: allocationsData, isLoading: allocationsLoading } = useQuery({
-        queryKey: ['courseAllocations', selectedBatch, currentSemester],
+        queryKey: ['courseAllocations', user?.tenantId, user?.id, selectedBatch, currentSemester],
         queryFn: () => courseAllocationApi.getByBatch(selectedBatch!, currentSemester),
         enabled: isCoursesModalOpen && !!selectedBatch,
     });
 
     // Fetch available locked courses for the department
     const { data: availableCourses = [] } = useQuery({
-        queryKey: ['courses', 'locked', departmentId],
+        queryKey: ['courses', 'locked', user?.tenantId, user?.id, departmentId],
         queryFn: () => courseApi.getAll({ departmentId: departmentId! }),
         select: (data) => data.filter((c: Course) => c.isLocked),
         enabled: isCoursesModalOpen && !!departmentId,
@@ -148,7 +156,7 @@ export default function SectionsPage() {
 
     // Fetch teachers in department
     const { data: teachers = [] } = useQuery({
-        queryKey: ['teachers', departmentId],
+        queryKey: ['teachers', user?.tenantId, user?.id, departmentId],
         queryFn: async () => {
             const response = await fetch(`/api/dept-admin/teachers`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -338,6 +346,30 @@ export default function SectionsPage() {
             </div>
 
             {/* Batch Filter */}
+            {isSuperAdmin && (
+                <Card className="p-4">
+                    <label htmlFor="section-department" className="mb-2 block text-sm font-medium text-neutral-700">
+                        Select Department:
+                    </label>
+                    <select
+                        id="section-department"
+                        value={selectedDepartment ?? ''}
+                        onChange={(event) => {
+                            setSelectedDepartment(event.target.value ? Number(event.target.value) : null);
+                            setSelectedBatch(null);
+                        }}
+                        className="input max-w-md"
+                    >
+                        <option value="">Choose a department</option>
+                        {departments.map((department: { id: number; name: string; code: string }) => (
+                            <option key={department.id} value={department.id}>
+                                {department.name} ({department.code})
+                            </option>
+                        ))}
+                    </select>
+                </Card>
+            )}
+
             <Card className="p-4">
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-neutral-600 mr-2">Select Batch:</span>
@@ -391,20 +423,20 @@ export default function SectionsPage() {
             )}
 
             {/* No Batch Selected */}
-            {!selectedBatch && (
+            {(!selectedBatch || !departmentId) && (
                 <Card className="p-12 text-center">
                     <Layers className="h-12 w-12 text-neutral-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-neutral-900">
-                        Select a batch
+                        {!departmentId ? 'Select a department' : 'Select a batch'}
                     </h3>
                     <p className="text-neutral-500 mt-1">
-                        Choose a batch above to view and manage sections
+                        Choose a department and batch above to view and manage sections
                     </p>
                 </Card>
             )}
 
             {/* Sections Grid */}
-            {selectedBatch && (
+            {selectedBatch && departmentId && (
                 <>
                     {sectionsLoading ? (
                         <div className="flex justify-center py-12">

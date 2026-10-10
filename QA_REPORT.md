@@ -96,3 +96,6 @@ Date: 2026-10-09
 - The Admissions Admin dashboard's department-status card could retain a cached “Admissions Closed” value after the backend had already reopened the department; the reopen failure was not shown to the user.
 - Removed server-side caching from this frequently mutated status endpoint, scoped its React Query key to the tenant and user, and added visible error messages for close/reopen failures.
 - In the testing tenant, created one synthetic QACS application, submitted it, and approved it as `ADM0005`. It is awaiting department closure for its temporary USN and student/parent account provisioning.
+- The live API now reports QACS as open with one approved synthetic application awaiting USN allocation. The earlier “closed” value was stale server/browser cache.
+- Super Admin Section Management had no department selector, so section creation was hidden for Super Admin users. Added tenant-scoped department selection, enabling the synthetic QACS section and later course/student setup. Client lint/build pass; live UI verification awaits Vercel deployment.
+- The admissions entry form now explicitly binds date-field IDs and commits date values on blur. This targets the required Date of Birth validation blocker observed during synthetic UI entry; live verification is pending.
