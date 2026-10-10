@@ -75,5 +75,12 @@ Date: 2026-10-09
 
 ## Admissions list discrepancy follow-up
 
-- The Admissions dashboard and Applications screen use React Query with a shared browser cache. The original query keys omitted the tenant and user identity, even though application visibility is tenant-scoped and Submitted applications are clerk-specific. This could reuse stale counts/lists after changing tenant or signing in as another clerk. The application screen also treated a failed request as an empty result, masking API errors as zero applications.
-- Updated the dashboard and applications query keys to include tenant and user IDs. The Applications page now displays a retryable error instead of claiming the list is empty if its request fails; the dashboard has a corresponding retry state. Production verification is pending.
+- The Admissions dashboard and Applications screen used React Query keys that omitted the tenant and user identity, even though application visibility is tenant-scoped and Submitted applications are clerk-specific. The application screen also treated a failed request as an empty result, masking API errors as zero applications.
+- Updated the dashboard and applications query keys to include tenant and user IDs. The Applications page now displays a retryable error instead of claiming the list is empty if its request fails; the dashboard has a corresponding retry state.
+- Verified in production as Admissions Clerk: the list and stats APIs both report one admission (`ADM0003`), and after reloading the deployed page Applications shows `1 total` and the approved QA student. This discrepancy is resolved.
+
+## No-Due faculty enrollment follow-up
+
+- Normal academic enrollment did not create the `NodueSubjectEnrollment` rows read by the faculty No-Due queue. Consequently, enrolled students could not appear for subject clearance and applying for a No-Due request could stall before the faculty stage.
+- Added a tenant-scoped sync helper called after course-to-batch enrollment and after new student enrollment into locked-course subjects. HOD teacher assignment now also assigns/reassigns pending No-Due subject reviews to the course teacher.
+- Added focused tests for row creation, tenant filtering, and teacher assignment. Build/tests pass locally. Live verification awaits deployment and a synthetic student in an allocated subject.

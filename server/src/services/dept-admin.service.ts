@@ -4,6 +4,7 @@ import { auditLogRepository, sectionRepository, courseRepository } from '../data
 import { courseAllocationRepository } from '../data-access/course-allocation.repository.js';
 import { userService } from './user.service.js';
 import { emailService } from './email.service.js';
+import { syncNoDueSubjectEnrollments } from './nodue-enrollment.sync.js';
 
 class DeptAdminService {
     /**
@@ -363,6 +364,29 @@ class DeptAdminService {
             allocationId,
             teacher.teacherProfile.id
         );
+
+        const [course, section] = await Promise.all([
+            prisma.course.findUnique({ where: { id: allocation.courseId }, select: { tenantId: true } }),
+            prisma.section.findUnique({ where: { id: allocation.sectionId }, select: { name: true } }),
+        ]);
+        if (!course || !section) throw new Error('Course allocation references missing course or section');
+
+        const subjects = await prisma.subject.findMany({
+            where: {
+                courseId: allocation.courseId,
+                section: section.name,
+                semester: { tenantId: course.tenantId, status: 'ACTIVE' },
+            },
+            include: { enrollments: { select: { studentId: true } } },
+        });
+        for (const subject of subjects) {
+            await syncNoDueSubjectEnrollments(prisma, {
+                tenantId: course.tenantId,
+                subjectId: subject.id,
+                studentProfileIds: subject.enrollments.map(enrollment => enrollment.studentId),
+                teacherUserId: teacher.id,
+            });
+        }
 
         await auditLogRepository.create({
             actorId,
@@ -738,6 +762,23 @@ class DeptAdminService {
                     studentId,
                 })),
                 skipDuplicates: true,
+            });
+
+            const allocation = await tx.courseAllocation.findUnique({
+                where: {
+                    courseId_sectionId_semesterNumber: {
+                        courseId: course.id,
+                        sectionId,
+                        semesterNumber: course.semesterNumber || 1,
+                    },
+                },
+                select: { teacher: { select: { userId: true } } },
+            });
+            await syncNoDueSubjectEnrollments(tx as unknown as Parameters<typeof syncNoDueSubjectEnrollments>[0], {
+                tenantId: course.tenantId,
+                subjectId: subject.id,
+                studentProfileIds,
+                teacherUserId: allocation?.teacher?.userId,
             });
         }
     }

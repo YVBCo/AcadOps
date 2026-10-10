@@ -3,6 +3,7 @@ import { courseRepository, auditLogRepository, sectionRepository, CreateCourseDa
 import { courseAllocationRepository } from '../data-access/course-allocation.repository.js';
 import { prisma } from '../data-access/prisma.js';
 import { logger as rootLogger } from '../utils/logger.js';
+import { syncNoDueSubjectEnrollments } from './nodue-enrollment.sync.js';
 
 const logger = rootLogger.child({ service: 'CourseService' });
 
@@ -262,6 +263,12 @@ class CourseService {
                         throw err;
                     }
                 }
+
+                await syncNoDueSubjectEnrollments(prisma, {
+                    tenantId,
+                    subjectId: subject.id,
+                    studentProfileIds: students.map(student => student.id),
+                });
             }
         }
 
