@@ -776,6 +776,10 @@ class UserService {
                         admissionYear: data.admissionYear,
                         batchId: batch.id,
                         currentSemester: semester,
+                        // First-year students are grouped by their cycle department
+                        // until they choose a branch. Department Admin student lists
+                        // use cycleDepartmentId for semesters 1–2.
+                        cycleDepartmentId: semester <= 2 ? data.departmentId : undefined,
                         optedDepartmentId: data.departmentId,
                     },
                 },
