@@ -114,6 +114,7 @@ export const batchRepository = {
                         id: true,
                         name: true,
                         email: true,
+                        createdAt: true,
                         role: true,
                         departmentId: true,
                         isActive: true,
