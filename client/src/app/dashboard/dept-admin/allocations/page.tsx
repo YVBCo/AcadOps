@@ -40,7 +40,7 @@ interface CourseAllocation {
     };
     teacher: {
         id: number;
-        user: { name: string };
+        user: { id: number; name: string };
     } | null;
 }
 
@@ -145,7 +145,9 @@ export default function AllocationsPage() {
 
     const openAssignModal = (allocation: CourseAllocation) => {
         setSelectedAllocation(allocation);
-        setSelectedTeacher(allocation.teacher?.id || 0);
+        // The allocation stores a TeacherProfile ID, but the selector posts a
+        // User ID to the assignment endpoint. Use the nested user ID here.
+        setSelectedTeacher(allocation.teacher?.user.id || 0);
         setShowAssignModal(true);
     };
 
