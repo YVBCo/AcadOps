@@ -153,14 +153,29 @@ export default function UsersPage() {
 
     const { data: deptStudentsData } = useQuery({
         queryKey: ['deptStudents', selectedDept?.id, selectedBatch?.id, currentUser?.departmentId],
-        queryFn: () => studentApi.getStudents({
-            // For Dept Admin, use their department; otherwise use selected department
-            departmentId: currentUser?.role === 'DEPARTMENT_ADMIN'
-                ? currentUser.departmentId
-                : selectedDept?.id === -1 ? undefined : selectedDept?.id,
-            batchId: selectedBatch?.id,
-            take: 1000 // Increased to show all students in a department/batch
-        }),
+        queryFn: async () => {
+            if (selectedDept?.id === -1 && selectedBatch) {
+                const profiles = await batchApi.getStudents(selectedBatch.id);
+                return {
+                    users: profiles.map((profile: any) => ({
+                        ...profile.user,
+                        studentProfile: {
+                            ...profile,
+                            section: profile.section,
+                            program: profile.program,
+                        },
+                    })),
+                };
+            }
+            return studentApi.getStudents({
+                // For Dept Admin, use their department; otherwise use selected department
+                departmentId: currentUser?.role === 'DEPARTMENT_ADMIN'
+                    ? currentUser.departmentId
+                    : selectedDept?.id,
+                batchId: selectedBatch?.id,
+                take: 1000 // Increased to show all students in a department/batch
+            });
+        },
         enabled: !!(selectedBatch && viewLevel === 'STUDENTS' &&
             (selectedDept?.id === -1 || selectedDept?.id || (currentUser?.role === 'DEPARTMENT_ADMIN' && currentUser.departmentId))),
     });
