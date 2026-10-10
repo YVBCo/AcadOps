@@ -36,10 +36,20 @@ export default function AdmissionsDashboardPage() {
     const { user } = useAuthStore();
     const deptStatusRef = useRef<HTMLDivElement>(null);
 
-    const { data: stats, isLoading } = useQuery<DashboardStats>({
-        queryKey: ['admissions-stats'],
+    const { data: stats, isLoading, isError, refetch } = useQuery<DashboardStats>({
+        queryKey: ['admissions-stats', user?.tenantId ?? null, user?.id ?? null],
         queryFn: () => admissionsApi.getStats(),
     });
+
+    if (isError) {
+        return (
+            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 text-center">
+                <p className="text-lg font-semibold text-slate-700">Could not load admissions dashboard</p>
+                <p className="text-sm text-slate-500">Check the connection and try again. The counters may be out of date until they load successfully.</p>
+                <button onClick={() => refetch()} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">Try Again</button>
+            </div>
+        );
+    }
 
     if (isLoading || !stats) {
         return (

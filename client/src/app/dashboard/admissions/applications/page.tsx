@@ -83,8 +83,9 @@ export default function ApplicationsPage() {
     const [lateralEntryDialogOpen, setLateralEntryDialogOpen] = useState(false);
     const [pendingLateralAdmissionId, setPendingLateralAdmissionId] = useState<number | null>(null);
 
-    const { data, isLoading } = useQuery<{ admissions: Admission[]; total: number }>({
-        queryKey: ['admissions', statusFilter, search, page],
+    const { data, isLoading, isError, refetch } = useQuery<{ admissions: Admission[]; total: number }>({
+        // The results vary by tenant and, for submitted items, by clerk.
+        queryKey: ['admissions', user?.tenantId ?? null, user?.id ?? null, statusFilter, search, page],
         queryFn: () => admissionsApi.getAll({
             status: statusFilter || undefined,
             search: search || undefined,
@@ -211,7 +212,7 @@ export default function ApplicationsPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-slate-800">Applications</h1>
-                <span className="text-sm text-slate-500">{total} total</span>
+                <span className="text-sm text-slate-500">{isError ? 'Unable to load total' : `${total} total`}</span>
             </div>
 
             {/* Filters */}
@@ -253,6 +254,15 @@ export default function ApplicationsPage() {
                         <div key={i} className="h-16 bg-slate-100 animate-pulse rounded-xl"></div>
                     ))}
                 </div>
+            ) : isError ? (
+                <Card>
+                    <div className="text-center py-12">
+                        <FileText className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                        <p className="text-slate-700 font-medium">Could not load applications</p>
+                        <p className="text-sm text-slate-500 mt-1">The application list request failed. Try again before treating this as an empty list.</p>
+                        <button onClick={() => refetch()} className="mt-4 px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-medium hover:bg-sky-700">Try Again</button>
+                    </div>
+                </Card>
             ) : admissions.length === 0 ? (
                 <Card>
                     <div className="text-center py-12">
