@@ -484,7 +484,7 @@ router.get('/edit-requests', authenticate, admissionsStaff, async (req: Request,
 });
 
 // GET /api/admissions/department-status - Get department admission status (must be before /:id)
-router.get('/department-status', authenticate, admissionsStaff, cacheResponse({ ttl: CacheDurations.DYNAMIC }), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/department-status', authenticate, admissionsStaff, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const status = await admissionsService.getDepartmentAdmissionStatus(req.user!.tenantId);
         res.json(status);

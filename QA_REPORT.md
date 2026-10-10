@@ -90,3 +90,9 @@ Date: 2026-10-09
 - Created and signed in with the approved synthetic Placement Company test account. Its company profile saved successfully, and the deployed API confirms the synthetic profile and test job belong to that account.
 - The company UI still displayed an empty job list and a stale “Set up company profile” link after switching roles. The PlacePro React Query keys shared results across users and tenants. Scoped profile, jobs, drives, applications, companies, and analytics keys by tenant and user, including mutation invalidations.
 - Client lint and production build passed. Live UI re-verification awaits Vercel deployment.
+
+## Admissions department status cache follow-up
+
+- The Admissions Admin dashboard's department-status card could retain a cached “Admissions Closed” value after the backend had already reopened the department; the reopen failure was not shown to the user.
+- Removed server-side caching from this frequently mutated status endpoint, scoped its React Query key to the tenant and user, and added visible error messages for close/reopen failures.
+- In the testing tenant, created one synthetic QACS application, submitted it, and approved it as `ADM0005`. It is awaiting department closure for its temporary USN and student/parent account provisioning.

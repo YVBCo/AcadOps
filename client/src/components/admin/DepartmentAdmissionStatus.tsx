@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Building2, Lock, LockOpen, Users, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { admissionsApi } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 
 interface DepartmentStatus {
     id: number;
@@ -27,13 +28,14 @@ interface CloseAdmissionResult {
 }
 
 export function DepartmentAdmissionStatus() {
+    const { user } = useAuthStore();
     const queryClient = useQueryClient();
     const [selectedDept, setSelectedDept] = useState<number | null>(null);
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [showResults, setShowResults] = useState<CloseAdmissionResult | null>(null);
 
     const { data: departments, isLoading } = useQuery<DepartmentStatus[]>({
-        queryKey: ['department-admission-status'],
+        queryKey: ['department-admission-status', user?.tenantId, user?.id],
         queryFn: () => admissionsApi.getDepartmentStatus(),
         refetchInterval: 30000,
     });
@@ -41,20 +43,22 @@ export function DepartmentAdmissionStatus() {
     const closeAdmissionMutation = useMutation({
         mutationFn: (departmentId: number) => admissionsApi.closeAdmissions(departmentId),
         onSuccess: (data: CloseAdmissionResult) => {
-            queryClient.invalidateQueries({ queryKey: ['department-admission-status'] });
+            queryClient.invalidateQueries({ queryKey: ['department-admission-status', user?.tenantId, user?.id] });
             queryClient.invalidateQueries({ queryKey: ['admissions-stats'] });
             setShowResults(data);
             setShowConfirmation(false);
             setSelectedDept(null);
         },
+        onError: (error: any) => window.alert(error.response?.data?.error || error.message || 'Could not close admissions.'),
     });
 
     const reopenAdmissionMutation = useMutation({
         mutationFn: (departmentId: number) => admissionsApi.reopenAdmissions(departmentId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['department-admission-status'] });
+            queryClient.invalidateQueries({ queryKey: ['department-admission-status', user?.tenantId, user?.id] });
             queryClient.invalidateQueries({ queryKey: ['admissions-stats'] });
         },
+        onError: (error: any) => window.alert(error.response?.data?.error || error.message || 'Could not reopen admissions.'),
     });
 
     if (isLoading) {
