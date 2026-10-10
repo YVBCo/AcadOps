@@ -209,17 +209,17 @@ export const userRepository = {
 
     // Get student counts grouped by department for a given batch (filtered by tenant)
     async getStudentCountsByBatch(batchId: number, tenantId: number): Promise<{ departmentId: number; count: number }[]> {
-        // Count by optedDepartmentId (for sem 3+) - this is the primary department
-        // Students in sem 1-2 will also have optedDepartmentId set to their branch (CS, EC, etc.)
+        // Prefer the student's opted/cycle department, then fall back to their
+        // tenant-scoped user department for older profiles missing both links.
         const counts = await prisma.$queryRaw<{ department_id: number; count: bigint }[]>`
-            SELECT COALESCE(sp.opted_department_id, sp.cycle_department_id) as department_id,
+            SELECT COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id) as department_id,
                    COUNT(*) as count
             FROM student_profiles sp
             INNER JOIN users u ON u.id = sp.user_id
             WHERE sp.batch_id = ${batchId}
               AND u.tenant_id = ${tenantId}
-              AND COALESCE(sp.opted_department_id, sp.cycle_department_id) IS NOT NULL
-            GROUP BY COALESCE(sp.opted_department_id, sp.cycle_department_id)
+              AND COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id) IS NOT NULL
+            GROUP BY COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id)
         `;
 
         return counts.map(c => ({ departmentId: Number(c.department_id), count: Number(c.count) }));
@@ -247,8 +247,9 @@ export const userRepository = {
         };
 
         // Build studentProfile filter conditions
-        // IMPORTANT: Student department is in StudentProfile (optedDepartmentId or cycleDepartmentId),
-        // NOT in User.departmentId
+        // StudentProfile is authoritative when present. Some older/admissions-created
+        // profiles have neither department link, so fall back to the tenant-scoped
+        // user's department only in that case.
         const profileConditions: Prisma.StudentProfileWhereInput = {};
 
         if (options.departmentId) {
@@ -258,6 +259,11 @@ export const userRepository = {
                 {
                     cycleDepartmentId: options.departmentId,
                     currentSemester: { lte: 2 }
+                },
+                {
+                    optedDepartmentId: null,
+                    cycleDepartmentId: null,
+                    user: { departmentId: options.departmentId },
                 },
             ];
         }
