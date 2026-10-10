@@ -67,13 +67,18 @@ export default function StudentNoDuePage() {
                 <div className="flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-slate-800">My Clearance Status</h1>
                     {(!status || status.currentStage === 'STUDENT_APPLICATION' || status.currentStage === 'REJECTED') && (
-                        <Button 
-                            onClick={() => applyMutation.mutate()} 
-                            disabled={applyMutation.isPending}
-                        >
-                            {applyMutation.isPending ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Apply for Clearance
-                        </Button>
+                        <div className="flex flex-col items-end gap-1">
+                            <Button
+                                onClick={() => applyMutation.mutate()}
+                                disabled={statusLoading || applyMutation.isPending || !status?.enrollments?.length}
+                            >
+                                {applyMutation.isPending ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                Apply for Clearance
+                            </Button>
+                            {!statusLoading && !status?.enrollments?.length && (
+                                <p className="text-xs text-slate-500">Enroll in at least one subject before applying.</p>
+                            )}
+                        </div>
                     )}
                 </div>
 

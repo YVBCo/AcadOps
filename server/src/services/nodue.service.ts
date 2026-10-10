@@ -47,6 +47,14 @@ class NodueService {
     }
 
     async applyClearance(tenantId: number, studentId: number) {
+        const enrollments = await prisma.nodueSubjectEnrollment.findMany({
+            where: { tenantId, studentId },
+            select: { id: true },
+        });
+        if (enrollments.length === 0) {
+            throw new Error('You must be enrolled in at least one subject before applying for clearance');
+        }
+
         const request = await this.getClearanceRequest(tenantId, studentId);
         
         if (request.currentStage !== NodueClearanceStage.STUDENT_APPLICATION) {
@@ -223,7 +231,7 @@ class NodueService {
 
         if (stage === NodueClearanceStage.FACULTY_REVIEW) {
             const enrollments = await prisma.nodueSubjectEnrollment.findMany({ where: { tenantId, studentId } });
-            const allCleared = enrollments.every(e => e.isFacultyCleared || e.status === NodueDueStatus.COMPLETED);
+            const allCleared = enrollments.length > 0 && enrollments.every(e => e.isFacultyCleared || e.status === NodueDueStatus.COMPLETED);
             if (allCleared) stage = NodueClearanceStage.LIBRARY_REVIEW;
         }
 
