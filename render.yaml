@@ -12,7 +12,7 @@ services:
     plan: starter
     rootDir: ./
     buildCommand: cd server && npm install && npx prisma generate && npx tsc --project tsconfig.json
-    startCommand: cd server && npm start
+    startCommand: cd server && node dist/src/index.js
     # The root health endpoint runs before API authentication and checks the DB/cache.
     healthCheckPath: /health
     envVars:
