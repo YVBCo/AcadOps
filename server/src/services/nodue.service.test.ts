@@ -43,6 +43,39 @@ describe('NoDueService tenant-scoped statistics', () => {
         });
     });
 
+    it('reopens a cleared request at department review when a new account due is pending', async () => {
+        prismaMock.nodueClearanceRequest.findFirst.mockResolvedValue({
+            id: 31,
+            currentStage: 'CLEARED',
+            status: 'COMPLETED',
+            clearedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+        prismaMock.nodueLibraryDue.findMany.mockResolvedValue([]);
+        prismaMock.nodueStudentDue.findMany.mockResolvedValue([{ id: 72, status: 'PENDING' }]);
+        prismaMock.nodueClearanceRequest.update.mockResolvedValue({ id: 31, currentStage: 'DEPARTMENT_REVIEW', status: 'PENDING', clearedAt: null });
+
+        await nodueService.evaluateClearanceStage(14, 33);
+
+        expect(prismaMock.nodueClearanceRequest.update).toHaveBeenCalledWith({
+            where: { id: 31 },
+            data: { currentStage: 'DEPARTMENT_REVIEW', status: 'PENDING', clearedAt: null },
+        });
+    });
+
+    it('reopens a cleared request at library review when a new library due is pending', async () => {
+        prismaMock.nodueClearanceRequest.findFirst.mockResolvedValue({ id: 32, currentStage: 'CLEARED', status: 'COMPLETED' });
+        prismaMock.nodueLibraryDue.findMany.mockResolvedValue([{ id: 73, status: 'PENDING' }]);
+        prismaMock.nodueStudentDue.findMany.mockResolvedValue([]);
+        prismaMock.nodueClearanceRequest.update.mockResolvedValue({ id: 32, currentStage: 'LIBRARY_REVIEW', status: 'PENDING' });
+
+        await nodueService.evaluateClearanceStage(14, 34);
+
+        expect(prismaMock.nodueClearanceRequest.update).toHaveBeenCalledWith({
+            where: { id: 32 },
+            data: { currentStage: 'LIBRARY_REVIEW', status: 'PENDING', clearedAt: null },
+        });
+    });
+
     it('does not create a clearance application when the student has no enrolled subjects', async () => {
         prismaMock.nodueSubjectEnrollment.findMany.mockResolvedValue([]);
 

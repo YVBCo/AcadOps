@@ -273,9 +273,40 @@ class NodueService {
 
     async evaluateClearanceStage(tenantId: number, studentId: number) {
         const request = await this.getClearanceRequest(tenantId, studentId);
-        
-        if (request.currentStage === NodueClearanceStage.CLEARED || request.currentStage === NodueClearanceStage.STUDENT_APPLICATION) {
+
+        if (request.currentStage === NodueClearanceStage.STUDENT_APPLICATION) {
             return request;
+        }
+
+        // A due may be added after a request was cleared. Reopen the request at
+        // the relevant office so a student cannot remain marked cleared while
+        // an outstanding balance exists.
+        if (request.currentStage === NodueClearanceStage.CLEARED) {
+            const [libraryDues, studentDues] = await Promise.all([
+                prisma.nodueLibraryDue.findMany({
+                    where: { tenantId, studentId, hasDues: true, status: NodueDueStatus.PENDING },
+                }),
+                prisma.nodueStudentDue.findMany({
+                    where: { tenantId, studentId, hasDues: true, status: NodueDueStatus.PENDING },
+                }),
+            ]);
+
+            const reopenedStage = libraryDues.length > 0
+                ? NodueClearanceStage.LIBRARY_REVIEW
+                : studentDues.length > 0
+                    ? NodueClearanceStage.DEPARTMENT_REVIEW
+                    : null;
+
+            if (!reopenedStage) return request;
+
+            return prisma.nodueClearanceRequest.update({
+                where: { id: request.id },
+                data: {
+                    currentStage: reopenedStage,
+                    status: NodueDueStatus.PENDING,
+                    clearedAt: null,
+                },
+            });
         }
 
         let stage = request.currentStage;
