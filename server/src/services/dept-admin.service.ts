@@ -698,6 +698,7 @@ class DeptAdminService {
                 section.name,
                 section.batchId,
                 section.departmentId,
+                section.tenantId,
                 studentProfileIds
             );
 
@@ -775,33 +776,49 @@ class DeptAdminService {
         sectionName: string,
         batchId: number,
         departmentId: number,
+        tenantId: number,
         studentProfileIds: number[]
     ): Promise<void> {
-        // Find locked courses that target this batch
-        const lockedCourses = await tx.course.findMany({
+        // Existing section allocations are authoritative. Catalog courses need
+        // not have targetBatchId set when they were allocated directly to a
+        // section by the department administrator.
+        const allocations = await tx.courseAllocation.findMany({
             where: {
-                targetBatchId: batchId,
-                departmentId,
-                isLocked: true,
+                sectionId,
+                section: { batchId, departmentId, tenantId },
+                semesterNumber: { in: [1, 2, 3, 4, 5, 6, 7, 8] },
+                course: { tenantId, departmentId, isLocked: true },
             },
+            include: { course: true, teacher: { select: { userId: true } } },
         });
 
-        if (lockedCourses.length === 0) return;
+        if (allocations.length === 0) return;
 
         // Find active semester
-        const firstCourse = lockedCourses[0];
         const activeSemester = await tx.semester.findFirst({
             where: {
-                tenantId: firstCourse.tenantId,
+                tenantId,
                 status: 'ACTIVE',
             },
         });
 
         if (!activeSemester) return;
 
-        for (const course of lockedCourses) {
+        for (const allocation of allocations) {
+            const course = allocation.course;
+            const eligibleStudentIds = await tx.studentProfile.findMany({
+                where: {
+                    id: { in: studentProfileIds },
+                    sectionId,
+                    currentSemester: allocation.semesterNumber,
+                    user: { tenantId: course.tenantId },
+                },
+                select: { id: true },
+            });
+            if (eligibleStudentIds.length === 0) continue;
+
             // Find the subject for this course + section + semester
-            const subject = await tx.subject.findUnique({
+            const subject = await tx.subject.upsert({
                 where: {
                     courseId_semesterId_section: {
                         courseId: course.id,
@@ -809,34 +826,28 @@ class DeptAdminService {
                         section: sectionName,
                     },
                 },
+                create: {
+                    courseId: course.id,
+                    semesterId: activeSemester.id,
+                    section: sectionName,
+                },
+                update: {},
             });
-
-            if (!subject) continue;
 
             // Batch enroll all students at once (skip duplicates)
             await tx.enrollment.createMany({
-                data: studentProfileIds.map(studentId => ({
+                data: eligibleStudentIds.map(({ id: studentId }) => ({
                     subjectId: subject.id,
                     studentId,
                 })),
                 skipDuplicates: true,
             });
 
-            const allocation = await tx.courseAllocation.findUnique({
-                where: {
-                    courseId_sectionId_semesterNumber: {
-                        courseId: course.id,
-                        sectionId,
-                        semesterNumber: course.semesterNumber || 1,
-                    },
-                },
-                select: { teacher: { select: { userId: true } } },
-            });
             await syncNoDueSubjectEnrollments(tx as unknown as Parameters<typeof syncNoDueSubjectEnrollments>[0], {
                 tenantId: course.tenantId,
                 subjectId: subject.id,
-                studentProfileIds,
-                teacherUserId: allocation?.teacher?.userId,
+                studentProfileIds: eligibleStudentIds.map(({ id }) => id),
+                teacherUserId: allocation.teacher?.userId,
             });
         }
     }

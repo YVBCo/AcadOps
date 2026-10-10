@@ -80,4 +80,40 @@ describe('Department Admin course allocation', () => {
         expect(prismaMock.enrollment.createMany).toHaveBeenCalledTimes(2);
         expect(prismaMock.nodueSubjectEnrollment.createMany).toHaveBeenCalledTimes(2);
     });
+
+    it('enrolls newly assigned students into existing locked section allocations without targetBatchId', async () => {
+        prismaMock.section.findUnique.mockResolvedValue({
+            id: 12, name: 'A', batchId: 4, departmentId: 3, tenantId: 8, isLocked: false,
+        });
+        prismaMock.studentProfile.updateMany.mockResolvedValue({ count: 1 });
+        prismaMock.courseAllocation.findMany.mockResolvedValue([{
+            semesterNumber: 1,
+            course: { id: 21, tenantId: 8, departmentId: 3, isLocked: true },
+            teacher: { userId: 141 },
+        }]);
+        prismaMock.semester.findFirst.mockResolvedValue({ id: 5 });
+        prismaMock.studentProfile.findMany.mockResolvedValue([{ id: 41, userId: 241 }]);
+        prismaMock.subject.upsert.mockResolvedValue({ id: 51 });
+        prismaMock.enrollment.createMany.mockResolvedValue({ count: 1 });
+
+        await deptAdminService.assignStudentsToSection(12, [41], 99);
+
+        expect(prismaMock.courseAllocation.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({
+                sectionId: 12,
+                section: { batchId: 4, departmentId: 3, tenantId: 8 },
+                course: { tenantId: 8, departmentId: 3, isLocked: true },
+            }),
+        }));
+        expect(prismaMock.subject.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            where: { courseId_semesterId_section: { courseId: 21, semesterId: 5, section: 'A' } },
+        }));
+        expect(prismaMock.enrollment.createMany).toHaveBeenCalledWith({
+            data: [{ subjectId: 51, studentId: 41 }], skipDuplicates: true,
+        });
+        expect(prismaMock.nodueSubjectEnrollment.createMany).toHaveBeenCalledWith({
+            data: [{ tenantId: 8, studentId: 241, subjectId: 51, teacherId: 141 }],
+            skipDuplicates: true,
+        });
+    });
 });
