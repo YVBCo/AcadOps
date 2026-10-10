@@ -217,7 +217,40 @@ export default function TeacherInternalMarksPage() {
     const submitMutation = useMutation({
         mutationFn: async () => {
             if (!selectedAllocation) throw new Error('No allocation selected');
-            return teacherApi.submitMarks(selectedAllocation.sectionId, selectedAllocation.courseId);
+
+            const entries = Object.values(marksData).filter(mark => !mark.isFinalized);
+            if (entries.length === 0) {
+                throw new Error('There are no editable student marks to submit.');
+            }
+
+            const incomplete = entries.find(mark =>
+                [mark.internal1, mark.internal2, mark.internal3].filter(value => value !== null).length < 2 ||
+                mark.assignmentMarks === null
+            );
+            if (incomplete) {
+                throw new Error(`Enter at least two internal marks and the assignment mark for ${incomplete.usn} before submitting.`);
+            }
+
+            // Persist the values currently in the form before finalizing them.
+            // Previously Submit & Lock only finalized rows already in the DB,
+            // so newly entered marks could be silently discarded.
+            const payload = entries.map(mark => ({
+                studentUsn: mark.usn,
+                courseId: selectedAllocation.courseId,
+                batchId: selectedAllocation.section.batch.id,
+                sectionId: selectedAllocation.sectionId,
+                internal1: mark.internal1,
+                internal2: mark.internal2,
+                internal3: mark.internal3,
+                assignmentMarks: mark.assignmentMarks,
+            }));
+            await teacherApi.bulkRecordMarks(payload, selectedAllocation.semesterNumber);
+
+            const result = await teacherApi.submitMarks(selectedAllocation.sectionId, selectedAllocation.courseId);
+            if (!result?.submitted) {
+                throw new Error('No marks were submitted. Save the marks and try again.');
+            }
+            return result;
         },
         onSuccess: () => {
             setMessage({ type: 'success', text: 'Marks submitted and locked!' });
@@ -225,7 +258,7 @@ export default function TeacherInternalMarksPage() {
             setTimeout(() => setMessage(null), 3000);
         },
         onError: (error: any) => {
-            setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to submit marks' });
+            setMessage({ type: 'error', text: error.response?.data?.message || error.message || 'Failed to submit marks' });
         }
     });
 

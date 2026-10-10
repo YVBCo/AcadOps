@@ -18,6 +18,7 @@ import {
     Shield,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { toast } from 'sonner';
 
 interface Conversation {
     id: number;
@@ -127,6 +128,9 @@ export default function ParentChatPage() {
             queryClient.invalidateQueries({ queryKey: ['chat-conversations'] });
             setActiveConversation(data.id);
             setShowMobileList(false);
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.error || error.response?.data?.message || error.message || 'Unable to start a chat. Contact the department if no mentor is assigned.');
         },
     });
 
