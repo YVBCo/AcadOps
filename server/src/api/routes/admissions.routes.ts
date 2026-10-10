@@ -44,7 +44,7 @@ const logoUpload = multer({
 // Admission CRUD
 // ============================================
 
-const createAdmissionSchema = z.object({
+export const createAdmissionSchema = z.object({
     applicantName: z.string().min(2),
     applyingThrough: z.string().optional(),
     gender: z.string().optional(),
