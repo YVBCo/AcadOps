@@ -32,12 +32,29 @@ const gradeSubmissionSchema = z.object({
     feedback: z.string().optional(),
 });
 
+async function canViewSubjectAssignments(userId: number, role: string, subjectId: number): Promise<boolean> {
+    if (role === 'STUDENT') {
+        const student = await assignmentService.getStudentProfileByUserId(userId);
+        return !!student && assignmentService.isStudentEnrolled(student.id, subjectId);
+    }
+
+    if (role === 'TEACHER' || role === 'DEPARTMENT_ADMIN' || role === 'SUPER_ADMIN') {
+        return assignmentService.canManageSubjectAssignments(userId, subjectId, role);
+    }
+
+    return false;
+}
+
 
 
 // GET /api/assignments/subject/:subjectId - Get all assignments for a subject
 router.get('/subject/:subjectId', authenticate, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const subjectId = parseIntParam(req.params.subjectId, 'subjectId');
+        if (!await canViewSubjectAssignments(req.user!.userId, req.user!.role, subjectId)) {
+            res.status(404).json({ error: 'Subject not found' });
+            return;
+        }
         const assignments = await assignmentService.getAssignmentsBySubject(subjectId);
         res.json(assignments);
     } catch (error) {
@@ -54,6 +71,21 @@ router.get('/:id', authenticate, async (req: Request, res: Response, next: NextF
             res.status(404).json({ error: 'Assignment not found' });
             return;
         }
+        if (!await canViewSubjectAssignments(req.user!.userId, req.user!.role, assignment.subjectId)) {
+            res.status(404).json({ error: 'Assignment not found' });
+            return;
+        }
+
+        if (req.user!.role === 'STUDENT') {
+            const assignmentWithRelations = assignment as typeof assignment & {
+                submissions?: unknown;
+                _count?: unknown;
+            };
+            const { submissions: _submissions, _count: _count, ...studentAssignment } = assignmentWithRelations;
+            res.json(studentAssignment);
+            return;
+        }
+
         res.json(assignment);
     } catch (error) {
         next(error);

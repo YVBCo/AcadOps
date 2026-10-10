@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheResponse, invalidateCache } from './cache.middleware.js';
 
-function request(url: string, tenantId = 501) {
-    return { method: 'GET', originalUrl: url, user: { tenantId } } as any;
+function request(url: string, tenantId = 501, userId = 700) {
+    return { method: 'GET', originalUrl: url, user: { tenantId, userId, role: 'STUDENT' } } as any;
 }
 
 function response() {
     return { statusCode: 200, json: vi.fn(function (this: any) { return this; }) } as any;
 }
 
-function read(url: string, tenantId = 501) {
-    const req = request(url, tenantId);
+function read(url: string, tenantId = 501, userId = 700) {
+    const req = request(url, tenantId, userId);
     const res = response();
     const json = res.json;
     const next = vi.fn();
@@ -48,5 +48,14 @@ describe('response cache invalidation', () => {
         expect(refreshedTenantRead.next).toHaveBeenCalledOnce();
         expect(cachedOtherTenantRead.next).not.toHaveBeenCalled();
         expect(cachedOtherTenantRead.json).toHaveBeenCalledWith([]);
+    });
+
+    it('does not share a cached response between accounts in the same tenant', () => {
+        const firstUser = read('/api/student/profile', 501, 700);
+        firstUser.res.json({ name: 'Student One' });
+
+        const secondUser = read('/api/student/profile', 501, 701);
+        expect(secondUser.next).toHaveBeenCalledOnce();
+        expect(secondUser.json).not.toHaveBeenCalled();
     });
 });

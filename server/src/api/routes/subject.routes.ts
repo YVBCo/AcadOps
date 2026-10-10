@@ -108,11 +108,46 @@ router.get('/student/history', authenticate, cacheResponse({ ttl: CacheDurations
 router.get('/:id', authenticate, cacheResponse({ ttl: CacheDurations.SEMI_STATIC }), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const id = parseIntParam(req.params.id, 'id');
+
+        // Students and teachers must only be able to open subjects they are
+        // enrolled in or assigned to. The dashboard hides other subjects, but
+        // direct URL/API requests must enforce the same access boundary.
+        if (req.user!.role === 'STUDENT' || req.user!.role === 'TEACHER') {
+            const role = req.user!.role;
+            const profileId = await subjectService.getUserProfileId(req.user!.userId, role);
+            if (!profileId) {
+                res.status(404).json({ error: `${role === 'STUDENT' ? 'Student' : 'Teacher'} profile not found` });
+                return;
+            }
+
+            const accessibleSubjects = role === 'STUDENT'
+                ? await subjectService.getByStudent(profileId)
+                : await subjectService.getByTeacher(profileId);
+            if (!accessibleSubjects.some(subject => subject.id === id)) {
+                res.status(404).json({ error: 'Subject not found' });
+                return;
+            }
+        }
+
         const subject = await subjectService.getById(id);
         if (!subject) {
             res.status(404).json({ error: 'Subject not found' });
             return;
         }
+
+        if (req.user!.role === 'STUDENT') {
+            // Enrollment lists contain classmates' personal details and are
+            // only needed by staff. The student subject page needs course,
+            // semester, and instructor data only.
+            const subjectWithRelations = subject as typeof subject & {
+                enrollments?: unknown;
+                _count?: unknown;
+            };
+            const { enrollments: _enrollments, _count: _count, ...studentSubject } = subjectWithRelations;
+            res.json(studentSubject);
+            return;
+        }
+
         res.json(subject);
     } catch (error) {
         next(error);

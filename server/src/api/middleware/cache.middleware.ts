@@ -39,8 +39,9 @@ setInterval(() => {
 /**
  * In-memory response cache middleware.
  * Caches GET responses for the specified TTL (in seconds).
- * Cache keys use the same `api:<tenantId>:<URL>` format accepted by
- * invalidateCache so successful mutations invalidate their tenant's reads.
+ * Cache keys keep the tenant and URL prefix accepted by invalidateCache, then
+ * add the authenticated user identity so personalized GET responses cannot be
+ * reused by another account in the same tenant.
  *
  * Accepts either a plain number or { ttl: number } for convenience:
  *   cacheResponse(60)  OR  cacheResponse({ ttl: 60 })
@@ -53,8 +54,9 @@ export function cacheResponse(options: number | { ttl: number } = 60) {
             return;
         }
 
-        const tenantId = (req as any).user?.tenantId || 'anon';
-        const cacheKey = `api:${tenantId}:${req.originalUrl}`;
+        const user = (req as any).user as { tenantId?: number; userId?: number; role?: string } | undefined;
+        const tenantId = user?.tenantId || 'anon';
+        const cacheKey = `api:${tenantId}:${req.originalUrl}:user:${user?.userId ?? 'anon'}:${user?.role ?? 'anon'}`;
         const cached = memoryCache.get(cacheKey);
 
         if (cached && Date.now() - cached.timestamp < cached.ttl) {

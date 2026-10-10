@@ -44,6 +44,14 @@ export const assignmentService = {
         });
     },
 
+    async isStudentEnrolled(studentProfileId: number, subjectId: number): Promise<boolean> {
+        const enrollment = await prisma.enrollment.findUnique({
+            where: { studentId_subjectId: { studentId: studentProfileId, subjectId } },
+            select: { studentId: true },
+        });
+        return !!enrollment;
+    },
+
     // Create assignment (Teachers or Admins only)
     async createAssignment(data: CreateAssignmentData, actorId: number): Promise<Assignment> {
         // Verify subject exists
