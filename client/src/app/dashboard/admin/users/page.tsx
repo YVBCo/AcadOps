@@ -157,12 +157,12 @@ export default function UsersPage() {
             // For Dept Admin, use their department; otherwise use selected department
             departmentId: currentUser?.role === 'DEPARTMENT_ADMIN'
                 ? currentUser.departmentId
-                : selectedDept?.id,
+                : selectedDept?.id === -1 ? undefined : selectedDept?.id,
             batchId: selectedBatch?.id,
             take: 1000 // Increased to show all students in a department/batch
         }),
         enabled: !!(selectedBatch && viewLevel === 'STUDENTS' &&
-            (selectedDept?.id || (currentUser?.role === 'DEPARTMENT_ADMIN' && currentUser.departmentId))),
+            (selectedDept?.id === -1 || selectedDept?.id || (currentUser?.role === 'DEPARTMENT_ADMIN' && currentUser.departmentId))),
     });
 
     // Query for student counts per department for selected batch
@@ -236,11 +236,20 @@ export default function UsersPage() {
     const batchDepartments = useMemo(() => {
         if (!selectedBatch) return [];
         const countsMap = new Map(studentCounts.map((c: { departmentId: number; count: number }) => [c.departmentId, c.count]));
-        return departments.map((dept: Department) => ({
+        const departmentCards = departments.map((dept: Department) => ({
             ...dept,
             studentCount: countsMap.get(dept.id) || 0
         }));
-    }, [selectedBatch, departments, studentCounts]);
+        if (currentUser?.role === 'SUPER_ADMIN') {
+            departmentCards.unshift({
+                id: -1,
+                name: 'All batch students',
+                code: 'ALL',
+                studentCount: selectedBatch._count?.students || 0,
+            });
+        }
+        return departmentCards;
+    }, [selectedBatch, departments, studentCounts, currentUser?.role]);
 
     const displayedUsers = roleFilter === 'STUDENT' && viewLevel === 'STUDENTS' ? deptStudents : users;
 
@@ -597,9 +606,9 @@ export default function UsersPage() {
                                 )}
                                 <div className="flex items-center gap-2">
                                     <Badge variant="neutral">Batch {selectedBatch?.name}</Badge>
-                                    <Badge variant="primary">{selectedDept?.code || currentUser?.department?.code}</Badge>
+                                    <Badge variant="primary">{selectedDept?.id === -1 ? 'ALL' : selectedDept?.code || currentUser?.department?.code}</Badge>
                                     <span className="font-semibold text-neutral-800">
-                                        {selectedDept?.name || currentUser?.department?.name} Students
+                                        {selectedDept?.id === -1 ? 'All batch' : selectedDept?.name || currentUser?.department?.name} Students
                                     </span>
                                 </div>
                             </div>
