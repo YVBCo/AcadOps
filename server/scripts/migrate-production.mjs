@@ -91,11 +91,29 @@ const migrations = readdirSync(migrationsDir)
     })
     .sort();
 
+let recorded = 0;
 for (const migration of migrations) {
     const result = run(`npx prisma migrate resolve --applied "${migration}"`, true);
-    if (result.success || isCode(result, 'P3008')) continue;
+    if (result.success || isCode(result, 'P3008')) {
+        recorded++;
+        continue;
+    }
 
-    console.error(`❌ Could not baseline migration ${migration}; refusing to deploy.`);
+    console.error(`⚠️  Could not baseline migration ${migration}.`);
+    if (result.error) console.error(result.error);
+
+    // The database was just synchronized successfully. If the very first
+    // baseline record cannot be created, there is no partial migration
+    // history to deploy against; start the app using the verified schema and
+    // retain the detailed Prisma error for follow-up. Do not continue after a
+    // later failure, since some migrations may already have been recorded.
+    if (recorded === 0 && migration === migrations[0]) {
+        console.warn('\n⚠️  Schema sync succeeded; starting without migration history.');
+        console.warn('   Prisma migrate deploy will retry baseline setup on the next restart.');
+        process.exit(0);
+    }
+
+    console.error('❌ A partial migration baseline may exist; refusing to deploy.');
     process.exit(1);
 }
 
