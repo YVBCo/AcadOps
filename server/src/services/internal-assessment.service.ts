@@ -8,6 +8,9 @@ import {
 } from '../data-access/internal-assessment.repository.js';
 import { auditLogRepository } from '../data-access/index.js';
 import { prisma } from '../data-access/prisma.js';
+import { logger } from '../utils/logger.js';
+
+const log = logger.child({ module: 'internal-assessment' });
 
 class InternalAssessmentService {
     /**
@@ -470,25 +473,31 @@ class InternalAssessmentService {
                 : [];
         });
 
-        // Keep the recalculated values and their audit record atomic. A callback
-        // transaction also avoids passing a dynamically built `any[]` of Prisma
-        // promises through the adapter's array-transaction implementation.
-        await prisma.$transaction(async tx => {
-            for (const change of changes) {
-                await tx.internalMarksDetail.update({
-                    where: { id: change.id },
-                    data: { calculatedTotal: change.calculatedTotal },
-                });
-            }
+        // Persist mark updates directly. A callback transaction here has caused
+        // production adapter failures for recalculation requests; it also made
+        // an audit-log insert failure roll back otherwise valid calculated totals.
+        for (const change of changes) {
+            await prisma.internalMarksDetail.update({
+                where: { id: change.id },
+                data: { calculatedTotal: change.calculatedTotal },
+            });
+        }
 
-            await auditLogRepository.create({
+        if (changes.length > 0) {
+            try {
+                await auditLogRepository.create({
                 actorId,
                 action: 'RECALCULATE_ALL_MARKS',
                 entityType: 'InternalAssessmentConfig',
                 entityId: config.id,
                 newValue: { courseId, semesterNumber, recordsUpdated: changes.length } as Prisma.JsonValue,
-            }, tx);
-        });
+                });
+            } catch (error) {
+                // Audit storage must not turn successful mark recalculation into
+                // a failed operation; retain the detail for backend diagnostics.
+                log.error({ error, courseId, semesterNumber }, 'Failed to audit internal marks recalculation');
+            }
+        }
 
         return { updated: changes.length };
     }
