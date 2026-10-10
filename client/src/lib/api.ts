@@ -1804,6 +1804,7 @@ export const studentTimetableApi = {
 // PLACEMENT API
 // ============================================
 export const placementApi = {
+      createCompanyAccount: async (data: any) => { const r = await api.post('/placement/companies/accounts', data); return r.data; },
     getMyCompany: async () => { const r = await api.get('/placement/companies/me'); return r.data; },
     createMyCompany: async (data: any) => { const r = await api.post('/placement/companies', data); return r.data; },
     updateMyCompany: async (data: any) => { const r = await api.patch('/placement/companies/me', data); return r.data; },

@@ -342,6 +342,16 @@ export default function AdminDashboard() {
                     iconColor="text-violet-600"
                     iconBgColor="bg-violet-50"
                 />
+                {isSuperAdmin && (
+                    <QuickActionCard
+                        href="/dashboard/admin/placement/companies"
+                        icon={Building2}
+                        label="Company Accounts"
+                        subtitle="Invite placement company representatives"
+                        iconColor="text-blue-600"
+                        iconBgColor="bg-blue-50"
+                    />
+                )}
             </QuickActionsGrid>
         </div>
     );

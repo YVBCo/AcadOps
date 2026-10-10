@@ -19,6 +19,59 @@ interface CreateUserInput {
 }
 
 class UserService {
+    /** Create a company login and link its placement profile atomically. */
+    async createPlacementCompanyAccount(
+        data: { email: string; name: string; companyName: string; phone?: string; website?: string; industry?: string; description?: string; address?: string; tenantId: number },
+        actorId: number,
+    ): Promise<{ user: User; company: Awaited<ReturnType<typeof prisma.placementCompany.create>>; emailSent: boolean }> {
+        const email = data.email.trim().toLowerCase();
+        const existingUser = await userRepository.findByTenantEmail(email, data.tenantId);
+        if (existingUser) throw new Error('Email already registered in this institution');
+
+        const password = this.generateSecurePassword();
+        const passwordHash = await authService.hashPassword(password);
+        const { user, company } = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+                data: { email, passwordHash, name: data.name.trim(), role: 'PLACEMENT_COMPANY', tenantId: data.tenantId },
+            });
+            const existingProfile = await tx.placementCompany.findUnique({
+                where: { tenantId_email: { tenantId: data.tenantId, email } },
+            });
+            if (existingProfile?.userId) throw new Error('A company account is already linked to this email');
+
+            const profileData = {
+                name: data.companyName.trim(), email, phone: data.phone?.trim() || null,
+                website: data.website?.trim() || null, industry: data.industry?.trim() || null,
+                description: data.description?.trim() || null, address: data.address?.trim() || null,
+                userId: createdUser.id,
+            };
+            const createdCompany = existingProfile
+                ? await tx.placementCompany.update({ where: { id: existingProfile.id }, data: profileData })
+                : await tx.placementCompany.create({ data: { ...profileData, tenantId: data.tenantId } });
+            return { user: createdUser, company: createdCompany };
+        });
+
+        await auditLogRepository.create({
+            actorId,
+            action: 'CREATE_USER',
+            entityType: 'User',
+            entityId: user.id,
+            newValue: { email: user.email, name: user.name, role: user.role, companyId: company.id } as Prisma.JsonValue,
+        });
+
+        const tenant = await prisma.tenant.findUnique({ where: { id: data.tenantId }, select: { slug: true } });
+        let emailSent = true;
+        await emailService.sendWelcomeEmail(
+            email, user.name, this.getRoleLabel(user.role), password, tenant?.slug,
+            { tenantId: data.tenantId, userId: user.id },
+        ).catch((err) => {
+            emailSent = false;
+            log.error({ err, email }, 'Placement company welcome email failed');
+        });
+
+        return { user, company, emailSent };
+    }
+
     // Create user (Admin only)
     async create(data: CreateUserInput, actorId: number): Promise<User> {
         // Check if email already exists within this tenant

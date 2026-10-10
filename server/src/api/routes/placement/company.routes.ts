@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { placementService } from '../../../services/placement.service.js';
+import { userService } from '../../../services/user.service.js';
 import { authenticate, requireRole } from '../../middleware/auth.middleware.js';
 
 const router = Router();
@@ -21,6 +22,54 @@ router.get('/me', requireRole('PLACEMENT_COMPANY'), async (req: Request, res: Re
     try {
         res.json(await placementService.getMyCompany(req.tenantId!, req.user!.userId));
     } catch (error) { next(error); }
+});
+
+// Super Admin provisions a company login and linked profile in one operation.
+router.post('/accounts', requireRole('SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data = z.object({
+            contactName: z.string().trim().min(2).max(120),
+            email: z.string().trim().email().max(254),
+            companyName: z.string().trim().min(2).max(160),
+            phone: z.string().trim().max(40).optional(),
+            website: z.string().trim().url().max(255).optional().or(z.literal('')),
+            industry: z.string().trim().max(100).optional(),
+            description: z.string().trim().max(5000).optional(),
+            address: z.string().trim().max(500).optional(),
+        }).parse(req.body);
+
+        const result = await userService.createPlacementCompanyAccount({
+            name: data.contactName,
+            email: data.email,
+            companyName: data.companyName,
+            phone: data.phone,
+            website: data.website,
+            industry: data.industry,
+            description: data.description,
+            address: data.address,
+            tenantId: req.tenantId!,
+        }, req.user!.userId);
+
+        const { passwordHash: _passwordHash, ...safeUser } = result.user;
+        res.status(201).json({
+            user: safeUser,
+            company: result.company,
+            emailSent: result.emailSent,
+            message: result.emailSent
+                ? `Company account created. Sign-in credentials were emailed to ${result.user.email}.`
+                : `Company account created, but the welcome email could not be sent to ${result.user.email}. Use password reset to provide access.`,
+        });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            res.status(400).json({ error: 'Please check the company contact and profile fields.' });
+            return;
+        }
+        if (error instanceof Error && (error.message.includes('already') || error.message.includes('registered'))) {
+            res.status(409).json({ error: error.message });
+            return;
+        }
+        next(error);
+    }
 });
 
 router.patch('/me', requireRole('PLACEMENT_COMPANY'), async (req: Request, res: Response, next: NextFunction) => {
