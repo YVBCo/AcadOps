@@ -28,6 +28,8 @@ interface AttendanceEntry {
     usn: string;
     status: AttendanceStatus;
     isSubmitted: boolean;
+    isSaved: boolean;
+    isDirty: boolean;
 }
 
 // Status configuration
@@ -109,8 +111,10 @@ export default function TeacherAttendancePage() {
             (students as any[]).forEach(s => {
                 initial[s.usn] = {
                     usn: s.usn,
-                    status: s.attendanceStatus || 'PRESENT',
-                    isSubmitted: s.isSubmitted || false,
+                    status: s.attendanceStatus || s.attendance?.status || 'PRESENT',
+                    isSubmitted: s.isSubmitted ?? s.attendance?.isLocked ?? false,
+                    isSaved: Boolean(s.attendance),
+                    isDirty: false,
                 };
             });
             setAttendance(initial);
@@ -124,8 +128,10 @@ export default function TeacherAttendancePage() {
             (historyStudents as any[]).forEach(s => {
                 initial[s.usn] = {
                     usn: s.usn,
-                    status: s.attendanceStatus || 'PRESENT',
-                    isSubmitted: s.isSubmitted || false,
+                    status: s.attendanceStatus || s.attendance?.status || 'PRESENT',
+                    isSubmitted: s.isSubmitted ?? s.attendance?.isLocked ?? false,
+                    isSaved: Boolean(s.attendance),
+                    isDirty: false,
                 };
             });
             setAttendance(initial);
@@ -160,7 +166,8 @@ export default function TeacherAttendancePage() {
             late: entries.filter(e => e.status === 'LATE').length,
             excused: entries.filter(e => e.status === 'EXCUSED').length,
             allSubmitted: entries.length > 0 && entries.every(e => e.isSubmitted),
-            canSubmit: entries.length > 0 && entries.some(e => !e.isSubmitted),
+            canLock: entries.length > 0 && entries.some(e => !e.isSubmitted) && entries.every(e => e.isSaved && !e.isDirty),
+            canSubmit: entries.length > 0 && entries.some(e => !e.isSubmitted && (!e.isSaved || e.isDirty)),
         };
     }, [attendance]);
 
@@ -168,7 +175,7 @@ export default function TeacherAttendancePage() {
     const updateStatus = useCallback((usn: string, status: AttendanceStatus) => {
         setAttendance(prev => ({
             ...prev,
-            [usn]: { ...prev[usn], status }
+            [usn]: { ...prev[usn], status, isDirty: prev[usn].isSaved && status !== prev[usn].status }
         }));
     }, []);
 
@@ -176,7 +183,11 @@ export default function TeacherAttendancePage() {
         setAttendance(prev => {
             const updated: Record<string, AttendanceEntry> = {};
             Object.entries(prev).forEach(([usn, entry]) => {
-                updated[usn] = entry.isSubmitted ? entry : { ...entry, status };
+                updated[usn] = entry.isSubmitted ? entry : {
+                    ...entry,
+                    status,
+                    isDirty: entry.isSaved && status !== entry.status,
+                };
             });
             return updated;
         });
@@ -195,11 +206,10 @@ export default function TeacherAttendancePage() {
             if (!currentDate) throw new Error('No date selected');
 
             const entries = Object.values(attendance)
-                .filter(e => !e.isSubmitted)
+                .filter(e => !e.isSubmitted && (!e.isSaved || e.isDirty))
                 .map(e => ({ studentUsn: e.usn, status: e.status }));
             if (entries.length === 0) {
-                // All records already saved — just lock/submit
-                return teacherApi.submitAttendance(selectedAllocation.sectionId, selectedAllocation.courseId, currentDate);
+                throw new Error('There are no attendance changes to save.');
             }
             return teacherApi.markAttendance(selectedAllocation.sectionId, selectedAllocation.courseId, currentDate, entries);
         },
@@ -311,7 +321,7 @@ export default function TeacherAttendancePage() {
                             </Button>
                         )}
                     {/* Submit & Lock Button - Entry mode only */}
-                    {viewMode === 'entry' && selectedAllocation && stats.allSubmitted && !stats.canSubmit && (
+                    {viewMode === 'entry' && selectedAllocation && stats.canLock && (
                         <Button
                             onClick={() => lockMutation.mutate()}
                             disabled={lockMutation.isPending || submitMutation.isPending}
