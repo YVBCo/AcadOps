@@ -20,6 +20,8 @@ function getClearanceStatus(enrollment: { clearanceStatus?: string; status?: str
 export default function FacultyNoDuePage() {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
+    const [review, setReview] = useState<{ id: number; action: 'clear' | 'reject' } | null>(null);
+    const [remarks, setRemarks] = useState('');
 
     const { data: students, isLoading } = useQuery({
         queryKey: ['nodue', 'enrollments', 'mystudents'],
@@ -44,16 +46,24 @@ export default function FacultyNoDuePage() {
         onError: () => toast.error('Failed to reject student')
     });
 
-    const handleClear = (id: number) => {
-        const remarks = prompt('Any remarks? (optional)');
-        clearMutation.mutate({ id, remarks: remarks || '' });
+    const openReview = (id: number, action: 'clear' | 'reject') => {
+        setRemarks('');
+        setReview({ id, action });
     };
 
-    const handleReject = (id: number) => {
-        const remarks = prompt('Reason for rejection:');
-        if (remarks) {
-            rejectMutation.mutate({ id, remarks });
+    const submitReview = () => {
+        if (!review) return;
+        if (review.action === 'reject' && !remarks.trim()) {
+            toast.error('Please provide a reason for rejection');
+            return;
         }
+        const mutation = review.action === 'clear' ? clearMutation : rejectMutation;
+        mutation.mutate({ id: review.id, remarks: remarks.trim() }, {
+            onSuccess: () => {
+                setReview(null);
+                setRemarks('');
+            },
+        });
     };
 
     const filtered = students?.filter((s: any) => 
@@ -119,10 +129,10 @@ export default function FacultyNoDuePage() {
                                             <td className="py-3 px-4">
                                                 {clearanceStatus === 'PENDING' && (
                                                     <div className="flex items-center gap-2">
-                                                        <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleClear(enrollment.id)}>
+                                                        <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => openReview(enrollment.id, 'clear')}>
                                                             <CheckCircle className="w-3.5 h-3.5 mr-1" /> Clear
                                                         </Button>
-                                                        <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleReject(enrollment.id)}>
+                                                        <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => openReview(enrollment.id, 'reject')}>
                                                             <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                                                         </Button>
                                                     </div>
@@ -138,6 +148,41 @@ export default function FacultyNoDuePage() {
                         </table>
                     </div>
                 </Card>
+                {review && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="review-title">
+                        <Card className="w-full max-w-md space-y-4 p-6">
+                            <div>
+                                <h2 id="review-title" className="text-lg font-semibold text-slate-800">
+                                    {review.action === 'clear' ? 'Clear subject requirement' : 'Reject subject requirement'}
+                                </h2>
+                                <p className="mt-1 text-sm text-slate-600">
+                                    {review.action === 'clear' ? 'Confirm that this student has completed this subject requirement.' : 'Provide a reason so the student knows why this requirement was rejected.'}
+                                </p>
+                            </div>
+                            <label className="block text-sm font-medium text-slate-700" htmlFor="review-remarks">
+                                Remarks {review.action === 'reject' ? '(required)' : '(optional)'}
+                            </label>
+                            <textarea
+                                id="review-remarks"
+                                value={remarks}
+                                onChange={(event) => setRemarks(event.target.value)}
+                                rows={3}
+                                className="w-full rounded-lg border border-slate-300 p-3 text-sm"
+                                placeholder={review.action === 'reject' ? 'Reason for rejection' : 'Optional note'}
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setReview(null)}>Cancel</Button>
+                                <Button
+                                    onClick={submitReview}
+                                    disabled={clearMutation.isPending || rejectMutation.isPending}
+                                    className={review.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : ''}
+                                >
+                                    {clearMutation.isPending || rejectMutation.isPending ? 'Saving…' : review.action === 'clear' ? 'Confirm Clear' : 'Confirm Reject'}
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                )}
             </div>
         </DashboardShell>
     );
