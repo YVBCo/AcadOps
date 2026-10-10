@@ -25,13 +25,13 @@ export default function PlacementDashboard() {
     const isAdmin = ['SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PRINCIPAL'].includes(user?.role || '');
 
     const { data: stats, isLoading: statsLoading } = useQuery({
-        queryKey: ['placement-stats'],
+        queryKey: ['placement-stats', user?.tenantId, user?.id],
         queryFn: () => placementApi.getStats(),
         enabled: isAdmin,
     });
 
     const { data: activeDrives = [], isLoading: drivesLoading } = useQuery({
-        queryKey: ['active-drives'],
+        queryKey: ['active-drives', user?.tenantId, user?.id],
         queryFn: () => placementApi.getDrives({ status: 'ACTIVE' }),
     });
 

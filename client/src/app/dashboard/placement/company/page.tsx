@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Save } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import DashboardShell from '@/components/layout/DashboardShell';
+import { useAuthStore } from '@/lib/auth-store';
 import { placementApi } from '@/lib/api';
 
 type CompanyProfile = {
@@ -19,10 +20,11 @@ type CompanyProfile = {
 const emptyProfile: CompanyProfile = { name: '', phone: '', website: '', industry: '', description: '', address: '' };
 
 export default function CompanyProfilePage() {
+    const { user } = useAuthStore();
     const queryClient = useQueryClient();
     const [form, setForm] = useState<CompanyProfile | null>(null);
     const { data: company, isLoading, error } = useQuery({
-        queryKey: ['placement-my-company'],
+        queryKey: ['placement-my-company', user?.tenantId, user?.id],
         queryFn: placementApi.getMyCompany,
     });
 
@@ -35,8 +37,8 @@ export default function CompanyProfilePage() {
             ? placementApi.updateMyCompany(data)
             : placementApi.createMyCompany(data),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['placement-my-company'] });
-            await queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+            await queryClient.invalidateQueries({ queryKey: ['placement-my-company', user?.tenantId, user?.id] });
+            await queryClient.invalidateQueries({ queryKey: ['placement-companies', user?.tenantId, user?.id] });
         },
     });
 

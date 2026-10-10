@@ -4,16 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, Users, Building2, Award } from 'lucide-react';
 import { StatCard, Card } from '@/components/ui/card';
 import DashboardShell from '@/components/layout/DashboardShell';
+import { useAuthStore } from '@/lib/auth-store';
 import { placementApi } from '@/lib/api';
 
 export default function AnalyticsPage() {
+    const { user } = useAuthStore();
     const { data: stats, isLoading: statsLoading } = useQuery({
-        queryKey: ['placement-stats'],
+        queryKey: ['placement-stats', user?.tenantId, user?.id],
         queryFn: () => placementApi.getStats(),
     });
 
     const { data: deptStats = [], isLoading: deptLoading } = useQuery({
-        queryKey: ['placement-dept-stats'],
+        queryKey: ['placement-dept-stats', user?.tenantId, user?.id],
         queryFn: () => placementApi.getDeptWiseStats(),
     });
 

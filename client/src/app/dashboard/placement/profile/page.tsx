@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, FileText, Upload, Save, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import DashboardShell from '@/components/layout/DashboardShell';
+import { useAuthStore } from '@/lib/auth-store';
 import { placementApi } from '@/lib/api';
 
 type ProfileForm = {
@@ -30,10 +31,11 @@ const toForm = (profile: any): ProfileForm => ({
 });
 
 export default function ProfilePage() {
+    const { user } = useAuthStore();
     const queryClient = useQueryClient();
     const [form, setForm] = useState<ProfileForm | null>(null);
     const { data: profile, isLoading, error } = useQuery({
-        queryKey: ['placement-profile'],
+        queryKey: ['placement-profile', user?.tenantId, user?.id],
         queryFn: placementApi.getProfile,
     });
 
@@ -50,15 +52,15 @@ export default function ProfilePage() {
             githubUrl: form?.githubUrl || undefined,
             portfolioUrl: form?.portfolioUrl || undefined,
         }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile', user?.tenantId, user?.id] }),
     });
     const uploadMutation = useMutation({
         mutationFn: placementApi.uploadCv,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile', user?.tenantId, user?.id] }),
     });
     const declarationMutation = useMutation({
         mutationFn: () => placementApi.submitDeclaration({ declarationType: 'available' }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-profile', user?.tenantId, user?.id] }),
     });
 
     const setField = (key: keyof ProfileForm, value: string) => setForm(current => current ? { ...current, [key]: value } : current);

@@ -30,19 +30,19 @@ export default function JobsPage() {
     const [salary, setSalary] = useState('');
 
     const { data: jobs = [], isLoading } = useQuery({
-        queryKey: ['placement-jobs'],
+        queryKey: ['placement-jobs', user?.tenantId, user?.id],
         queryFn: () => placementApi.getJobs(),
     });
 
     // We fetch companies for the Post Job dropdown
     const { data: companies = [] } = useQuery({
-        queryKey: ['placement-companies'],
+        queryKey: ['placement-companies', user?.tenantId, user?.id],
         queryFn: () => placementApi.getCompanies(),
         enabled: isAdmin,
     });
 
     const { data: myCompany } = useQuery({
-        queryKey: ['placement-my-company'],
+        queryKey: ['placement-my-company', user?.tenantId, user?.id],
         queryFn: placementApi.getMyCompany,
         enabled: isCompany,
     });
@@ -50,7 +50,7 @@ export default function JobsPage() {
     const createJobMutation = useMutation({
         mutationFn: (data: any) => placementApi.createJob(data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['placement-jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['placement-jobs', user?.tenantId, user?.id] });
             setShowPostModal(false);
             setTitle('');
             setCompanyId('');
@@ -69,7 +69,7 @@ export default function JobsPage() {
 
     const approveMutation = useMutation({
         mutationFn: (jobId: number) => placementApi.approveJob(jobId),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-jobs'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-jobs', user?.tenantId, user?.id] }),
         onError: (err: any) => alert(err.response?.data?.error || err.message),
     });
 
@@ -78,7 +78,7 @@ export default function JobsPage() {
         try {
             setIsAddingCompany(true);
             const company = await placementApi.createCompany({ name: companyName.trim(), email: companyEmail.trim() });
-            await queryClient.invalidateQueries({ queryKey: ['placement-companies'] });
+            await queryClient.invalidateQueries({ queryKey: ['placement-companies', user?.tenantId, user?.id] });
             if (company?.id) setCompanyId(String(company.id));
             setCompanyName('');
             setCompanyEmail('');

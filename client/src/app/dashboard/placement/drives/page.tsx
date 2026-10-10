@@ -21,12 +21,12 @@ export default function DrivesPage() {
     const [title, setTitle] = useState('');
 
     const { data: drives = [], isLoading } = useQuery({
-        queryKey: ['placement-drives'],
+        queryKey: ['placement-drives', user?.tenantId, user?.id],
         queryFn: () => placementApi.getDrives(),
     });
 
     const { data: companies = [] } = useQuery({
-        queryKey: ['placement-companies'],
+        queryKey: ['placement-companies', user?.tenantId, user?.id],
         queryFn: () => placementApi.getCompanies(),
         enabled: isAdmin,
     });
@@ -34,7 +34,7 @@ export default function DrivesPage() {
     const createDriveMutation = useMutation({
         mutationFn: (data: any) => placementApi.createDrive(data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['placement-drives'] });
+            queryClient.invalidateQueries({ queryKey: ['placement-drives', user?.tenantId, user?.id] });
             setShowModal(false);
             setCompanyId('');
             setDate('');

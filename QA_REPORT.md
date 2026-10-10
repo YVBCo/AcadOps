@@ -84,3 +84,9 @@ Date: 2026-10-09
 - Normal academic enrollment did not create the `NodueSubjectEnrollment` rows read by the faculty No-Due queue. Consequently, enrolled students could not appear for subject clearance and applying for a No-Due request could stall before the faculty stage.
 - Added a tenant-scoped sync helper called after course-to-batch enrollment and after new student enrollment into locked-course subjects. HOD teacher assignment now also assigns/reassigns pending No-Due subject reviews to the course teacher.
 - Added focused tests for row creation, tenant filtering, and teacher assignment. Build/tests pass locally. Live verification awaits deployment and a synthetic student in an allocated subject.
+
+## PlacePro cache isolation follow-up
+
+- Created and signed in with the approved synthetic Placement Company test account. Its company profile saved successfully, and the deployed API confirms the synthetic profile and test job belong to that account.
+- The company UI still displayed an empty job list and a stale “Set up company profile” link after switching roles. The PlacePro React Query keys shared results across users and tenants. Scoped profile, jobs, drives, applications, companies, and analytics keys by tenant and user, including mutation invalidations.
+- Client lint and production build passed. Live UI re-verification awaits Vercel deployment.

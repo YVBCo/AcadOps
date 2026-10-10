@@ -16,13 +16,13 @@ export default function ApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState('ALL');
 
     const { data: applications = [], isLoading } = useQuery({
-        queryKey: ['placement-applications'],
+        queryKey: ['placement-applications', user?.tenantId, user?.id],
         queryFn: () => placementApi.getApplications(),
     });
 
     const updateStatus = useMutation({
         mutationFn: ({ id, status }: { id: number; status: string }) => placementApi.updateApplicationStatus(id, { status }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-applications'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['placement-applications', user?.tenantId, user?.id] }),
     });
 
     const getStatusIcon = (status: string) => {
