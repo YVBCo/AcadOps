@@ -19,12 +19,14 @@ export interface UpdateBatchData {
 
 export const batchRepository = {
     // Find by ID
-    async findById(id: number): Promise<Batch | null> {
-        return prisma.batch.findUnique({
-            where: { id },
+    async findById(id: number, tenantId?: number): Promise<Batch | null> {
+        return prisma.batch.findFirst({
+            where: { id, ...(tenantId ? { tenantId } : {}) },
             include: {
                 _count: {
-                    select: { students: true },
+                    select: {
+                        students: tenantId ? { where: { user: { tenantId } } } : true,
+                    },
                 },
             },
         });
@@ -65,7 +67,12 @@ export const batchRepository = {
             where: tenantId ? { tenantId } : undefined,
             include: {
                 _count: {
-                    select: { students: true },
+                    select: {
+                        // A profile can reference a batch created by another tenant
+                        // if it was imported before tenant validation. Never expose
+                        // those students in this tenant's batch totals.
+                        students: tenantId ? { where: { user: { tenantId } } } : true,
+                    },
                 },
             },
             orderBy: { startYear: 'desc' },
@@ -73,9 +80,9 @@ export const batchRepository = {
     },
 
     // Get students in a batch
-    async getStudents(batchId: number): Promise<StudentProfile[]> {
+    async getStudents(batchId: number, tenantId?: number): Promise<StudentProfile[]> {
         return prisma.studentProfile.findMany({
-            where: { batchId },
+            where: { batchId, ...(tenantId ? { user: { tenantId } } : {}) },
             include: {
                 user: {
                     select: { id: true, name: true, email: true },

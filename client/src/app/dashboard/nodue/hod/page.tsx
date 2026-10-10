@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Search, CheckCircle } from 'lucide-react';
+import { Search, CheckCircle, XCircle } from 'lucide-react';
 
 export default function HODNoDuePage() {
     const queryClient = useQueryClient();
@@ -26,6 +26,16 @@ export default function HODNoDuePage() {
             queryClient.invalidateQueries({ queryKey: ['nodue', 'clearances', 'hod'] });
         },
         onError: () => toast.error('Failed to approve clearance')
+    });
+
+    const rejectEmptyMutation = useMutation({
+        mutationFn: (id: number) => nodueApi.rejectEmptyClearance(id),
+        onSuccess: () => {
+            toast.success('Invalid empty clearance request rejected');
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'clearances', 'hod'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
+        },
+        onError: (error: any) => toast.error(error.response?.data?.error || 'Failed to reject clearance request'),
     });
 
     const filtered = clearances?.filter((c: any) => 
@@ -85,9 +95,15 @@ export default function HODNoDuePage() {
                                                 <Badge variant="warning">{clearance.currentStage}</Badge>
                                             </td>
                                             <td className="py-3 px-4">
-                                                <Button size="sm" onClick={() => approveMutation.mutate(clearance.id)} disabled={approveMutation.isPending}>
-                                                    <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
-                                                </Button>
+                                                {clearance.student?.nodueEnrollmentCount === 0 ? (
+                                                    <Button size="sm" variant="outline" onClick={() => rejectEmptyMutation.mutate(clearance.id)} disabled={rejectEmptyMutation.isPending}>
+                                                        <XCircle className="w-3.5 h-3.5 mr-1" /> Reject empty request
+                                                    </Button>
+                                                ) : (
+                                                    <Button size="sm" onClick={() => approveMutation.mutate(clearance.id)} disabled={approveMutation.isPending}>
+                                                        <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))

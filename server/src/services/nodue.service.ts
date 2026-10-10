@@ -58,8 +58,15 @@ class NodueService {
 
         const request = await this.getClearanceRequest(tenantId, studentId);
         
-        if (request.currentStage !== NodueClearanceStage.STUDENT_APPLICATION) {
+        if (request.currentStage !== NodueClearanceStage.STUDENT_APPLICATION && request.currentStage !== NodueClearanceStage.REJECTED) {
             throw new Error('Clearance already applied or in progress');
+        }
+
+        if (request.currentStage === NodueClearanceStage.REJECTED) {
+            await prisma.nodueClearanceRequest.update({
+                where: { id: request.id },
+                data: { currentStage: NodueClearanceStage.STUDENT_APPLICATION, status: NodueDueStatus.PENDING, remarks: null, clearedAt: null },
+            });
         }
 
         const updated = await prisma.nodueClearanceRequest.update({
@@ -161,12 +168,55 @@ class NodueService {
             throw new Error('Request not at HOD_REVIEW stage');
         }
 
+        const enrollments = await prisma.nodueSubjectEnrollment.findMany({
+            where: { tenantId, studentId },
+            select: { id: true },
+        });
+        if (enrollments.length === 0) {
+            throw new ApiError(409, 'Cannot approve a clearance request without enrolled subjects. Reject it as an invalid empty request.');
+        }
+
         const updated = await prisma.nodueClearanceRequest.update({
             where: { id: request.id },
             data: { currentStage: NodueClearanceStage.PRINCIPAL_REVIEW },
         });
         await this.logActivity(tenantId, hodId, 'HOD', 'HOD_APPROVED', 'HOD approved clearance', request.id);
         return updated;
+    }
+
+    async rejectEmptyClearance(tenantId: number, requestId: number, reviewerId: number, reviewerRole: string) {
+        const request = await prisma.nodueClearanceRequest.findFirst({
+            where: { id: requestId, tenantId },
+        });
+        if (!request) throw new ApiError(404, 'Clearance request not found');
+        if (request.currentStage !== NodueClearanceStage.HOD_REVIEW) {
+            throw new ApiError(409, 'Only requests awaiting HOD review can be rejected here');
+        }
+
+        const enrollments = await prisma.nodueSubjectEnrollment.findMany({
+            where: { tenantId, studentId: request.studentId },
+            select: { id: true },
+        });
+        if (enrollments.length > 0) {
+            throw new ApiError(409, 'This request has enrolled subjects and cannot use the empty-request rejection action');
+        }
+
+        const rejected = await prisma.nodueClearanceRequest.update({
+            where: { id: request.id },
+            data: {
+                currentStage: NodueClearanceStage.REJECTED,
+                remarks: 'Rejected because the student has no enrolled subjects for clearance.',
+            },
+        });
+        await this.logActivity(
+            tenantId,
+            reviewerId,
+            reviewerRole,
+            'REJECT_EMPTY_CLEARANCE',
+            'Rejected an invalid clearance request with no enrolled subjects',
+            request.id,
+        );
+        return rejected;
     }
 
     async principalApprove(tenantId: number, studentId: number, principalId: number) {
@@ -210,13 +260,13 @@ class NodueService {
     }
 
     async getClearanceStats(tenantId: number) {
-        const [total, cleared, pendingHod, pendingPrincipal] = await Promise.all([
+        const [total, cleared, pending, pendingHod, pendingPrincipal] = await Promise.all([
             prisma.nodueClearanceRequest.count({ where: { tenantId } }),
             prisma.nodueClearanceRequest.count({ where: { tenantId, currentStage: NodueClearanceStage.CLEARED } }),
+            prisma.nodueClearanceRequest.count({ where: { tenantId, status: NodueDueStatus.PENDING, currentStage: { notIn: [NodueClearanceStage.CLEARED, NodueClearanceStage.REJECTED] } } }),
             prisma.nodueClearanceRequest.count({ where: { tenantId, currentStage: NodueClearanceStage.HOD_REVIEW } }),
             prisma.nodueClearanceRequest.count({ where: { tenantId, currentStage: NodueClearanceStage.PRINCIPAL_REVIEW } }),
         ]);
-        const pending = total - cleared;
 
         return { total, cleared, pending, pendingHod, pendingPrincipal };
     }

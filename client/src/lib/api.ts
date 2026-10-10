@@ -241,6 +241,7 @@ export const nodueApi = {
     applyClearance: async () => { const r = await api.post('/nodue/clearance/apply'); return r.data; },
     getAllClearances: async (params?: any) => { const r = await api.get('/nodue/clearance/all', { params }); return r.data; },
     hodApprove: async (id: number) => { const r = await api.patch(`/nodue/clearance/${id}/hod-approve`); return r.data; },
+    rejectEmptyClearance: async (id: number) => { const r = await api.patch(`/nodue/clearance/${id}/reject-empty`); return r.data; },
     principalApprove: async (id: number) => { const r = await api.patch(`/nodue/clearance/${id}/principal-approve`); return r.data; },
     getMyStudents: async () => { const r = await api.get('/nodue/enrollment/my-students'); return r.data; },
     clearEnrollment: async (id: number, data: any) => { const r = await api.patch(`/nodue/enrollment/${id}/clear`, data); return r.data; },

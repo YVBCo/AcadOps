@@ -89,8 +89,8 @@ class BatchService {
     }
 
     // Get batch by ID
-    async getById(id: number): Promise<Batch | null> {
-        return batchRepository.findById(id);
+    async getById(id: number, tenantId?: number): Promise<Batch | null> {
+        return batchRepository.findById(id, tenantId);
     }
 
     // Get all batches
@@ -99,12 +99,12 @@ class BatchService {
     }
 
     // Get students in a batch
-    async getStudents(batchId: number) {
-        const batch = await batchRepository.findById(batchId);
+    async getStudents(batchId: number, tenantId?: number) {
+        const batch = await batchRepository.findById(batchId, tenantId);
         if (!batch) {
             throw new Error('Batch not found');
         }
-        return batchRepository.getStudents(batchId);
+        return batchRepository.getStudents(batchId, tenantId);
     }
 
     // Assign all students in a batch to a department

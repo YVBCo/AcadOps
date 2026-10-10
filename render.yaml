@@ -13,7 +13,8 @@ services:
     rootDir: ./
     buildCommand: cd server && npm install && npx prisma generate && node scripts/migrate-production.mjs && npx tsc --project tsconfig.json
     startCommand: cd server && node dist/src/index.js
-    healthCheckPath: /api/health
+    # The root health endpoint runs before API authentication and checks the DB/cache.
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production

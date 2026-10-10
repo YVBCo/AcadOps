@@ -39,7 +39,7 @@ router.get('/', authenticate, cacheResponse({ ttl: CacheDurations.REFERENCE_DATA
 router.get('/:id', authenticate, cacheResponse({ ttl: CacheDurations.REFERENCE_DATA }), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const id = parseIntParam(req.params.id, 'id');
-        const batch = await batchService.getById(id);
+        const batch = await batchService.getById(id, req.user!.tenantId);
 
         if (!batch) {
             res.status(404).json({ error: 'Batch not found' });
@@ -56,7 +56,7 @@ router.get('/:id', authenticate, cacheResponse({ ttl: CacheDurations.REFERENCE_D
 router.get('/:id/students', authenticate, cacheResponse({ ttl: CacheDurations.SEMI_STATIC }), async (req: Request, res: Response, next: NextFunction) => {
     try {
         const id = parseIntParam(req.params.id, 'id');
-        const students = await batchService.getStudents(id);
+        const students = await batchService.getStudents(id, req.user!.tenantId);
         res.json(students);
     } catch (error) {
         next(error);

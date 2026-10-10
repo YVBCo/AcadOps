@@ -46,16 +46,46 @@ router.get('/all', authenticate, requireRole('DEPARTMENT_ADMIN', 'SUPER_ADMIN', 
                 ...(currentStage ? { currentStage } : {}),
                 ...(req.user!.role === 'DEPARTMENT_ADMIN' ? { student: { departmentId: req.user!.departmentId } } : {}),
             },
-            include: { student: { include: { studentProfile: { include: { batch: true } } } } },
+            include: {
+                student: {
+                    include: {
+                        studentProfile: { include: { batch: true } },
+                        _count: { select: { nodueEnrollmentsAsStudent: { where: { tenantId: req.tenantId! } } } },
+                    },
+                },
+            },
         });
         res.json(requests.map(request => ({
             ...request,
             student: {
                 ...request.student,
+                nodueEnrollmentCount: request.student._count.nodueEnrollmentsAsStudent,
                 user: { ...request.student, rollNumber: request.student.studentProfile?.rollNumber },
                 batch: request.student.studentProfile?.batch,
             },
         })));
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.patch('/:id/reject-empty', authenticate, requireRole('DEPARTMENT_ADMIN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid clearance request ID' });
+
+        const request = await prisma.nodueClearanceRequest.findFirst({
+            where: {
+                id,
+                tenantId: req.tenantId!,
+                ...(req.user!.role === 'DEPARTMENT_ADMIN' ? { student: { departmentId: req.user!.departmentId } } : {}),
+            },
+            select: { id: true, studentId: true },
+        });
+        if (!request) return res.status(404).json({ error: 'Request not found' });
+
+        const result = await nodueService.rejectEmptyClearance(req.tenantId!, request.id, req.user!.userId, req.user!.role);
+        res.json(result);
     } catch (error) {
         next(error);
     }
