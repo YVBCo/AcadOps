@@ -19,6 +19,7 @@ export default function JobsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showPostModal, setShowPostModal] = useState(false);
     const [showCompanyForm, setShowCompanyForm] = useState(false);
+    const [selectedJob, setSelectedJob] = useState<any | null>(null);
     const [companyName, setCompanyName] = useState('');
     const [companyEmail, setCompanyEmail] = useState('');
     const [isAddingCompany, setIsAddingCompany] = useState(false);
@@ -108,7 +109,7 @@ export default function JobsPage() {
                 applyMutation.mutate({ jobId });
             }
         } else {
-            alert(`Job ID: ${jobId}\nNavigating to details page...`);
+            setSelectedJob(jobs.find((job: any) => job.id === jobId) || null);
         }
     };
 
@@ -267,6 +268,31 @@ export default function JobsPage() {
                             </div>
                         </form>
                     </Card>
+                </div>
+            )}
+
+            {selectedJob && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setSelectedJob(null)}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="job-details-title" className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" onClick={(event: React.MouseEvent) => event.stopPropagation()}>
+                        <div className="mb-5 flex items-start justify-between gap-4">
+                            <div>
+                                <h2 id="job-details-title" className="text-xl font-bold text-slate-900">{selectedJob.title}</h2>
+                                <p className="mt-1 text-slate-600">{selectedJob.company?.name || 'Company'}</p>
+                            </div>
+                            <button type="button" aria-label="Close job details" onClick={() => setSelectedJob(null)} className="rounded p-1 text-slate-400 hover:text-slate-700">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="mb-5 grid grid-cols-1 gap-3 text-sm text-slate-600 sm:grid-cols-2">
+                            <p><span className="font-medium text-slate-800">Location:</span> {selectedJob.location || 'Not specified'}</p>
+                            <p><span className="font-medium text-slate-800">Type:</span> {selectedJob.jobType?.replaceAll('_', ' ') || 'Full Time'}</p>
+                            <p><span className="font-medium text-slate-800">Salary:</span> {selectedJob.salary || selectedJob.stipend || 'Not disclosed'}</p>
+                            <p><span className="font-medium text-slate-800">Status:</span> {selectedJob.isApproved ? 'Approved' : 'Pending approval'}</p>
+                        </div>
+                        <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
+                            {selectedJob.description || 'No job description was provided.'}
+                        </div>
+                    </div>
                 </div>
             )}
         </DashboardShell>
