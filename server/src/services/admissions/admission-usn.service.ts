@@ -499,29 +499,13 @@ class AdmissionUsnService {
         });
         if (existing) throw new Error(`Permanent USN ${permanentUsn} is already assigned to another student`);
 
-        const dept = await prisma.department.findUnique({ where: { id: profile.user.departmentId! } });
-        const deptCode = dept?.code?.toUpperCase() || 'GEN';
-        const last3 = permanentUsn.slice(-3);
-        const batchYear = profile.admissionYear;
-        const newPassword = `${deptCode}${batchYear}${last3}`;
-        const passwordHash = await authService.hashPassword(newPassword);
-
-        await prisma.$transaction(async (tx) => {
-            await tx.studentProfile.update({
-                where: { id: studentProfileId },
-                data: {
-                    permanentUsn,
-                    isPermanentUsnLocked: true,
-                    rollNumber: permanentUsn,
-                },
-            });
-
-            await tx.user.update({
-                where: { id: profile.userId },
-                data: {
-                    passwordHash,
-                },
-            });
+        await prisma.studentProfile.update({
+            where: { id: studentProfileId },
+            data: {
+                permanentUsn,
+                isPermanentUsnLocked: true,
+                rollNumber: permanentUsn,
+            },
         });
 
         await auditLogRepository.create({

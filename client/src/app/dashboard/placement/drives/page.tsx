@@ -65,7 +65,7 @@ export default function DrivesPage() {
 
     return (
         <DashboardShell 
-            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN']}
+            allowedRoles={['STUDENT', 'SUPER_ADMIN', 'DEPARTMENT_ADMIN', 'PLACEMENT_COMPANY']}
             portalName="Placement Portal"
             basePath="/dashboard/placement"
         >

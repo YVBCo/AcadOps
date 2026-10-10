@@ -596,34 +596,14 @@ class AdmissionsService {
         });
         if (existing) throw new Error(`Permanent USN ${permanentUsn} is already assigned to another student`);
 
-        // Parse USN for password generation: <DEPT_CODE><BATCH_YEAR><LAST_3_DIGITS>
-        // Example: 4MH23CS185 → Password: CSE2023185
-        const dept = await prisma.department.findUnique({ where: { id: profile.user.departmentId! } });
-        const deptCode = dept?.code?.toUpperCase() || 'GEN';
-        const last3 = permanentUsn.slice(-3);
-        const batchYear = profile.admissionYear;
-        const newPassword = `${deptCode}${batchYear}${last3}`;
-        const passwordHash = await authService.hashPassword(newPassword);
-
-        // Update profile and user in transaction
-        await prisma.$transaction(async (tx) => {
-            await tx.studentProfile.update({
-                where: { id: studentProfileId },
-                data: {
-                    permanentUsn,
-                    isPermanentUsnLocked: true,
-                    rollNumber: permanentUsn, // Update roll number to permanent USN
-                },
-            });
-
-            // Update user email to use permanent USN and reset password
-            await tx.user.update({
-                where: { id: profile.userId },
-                data: {
-                    passwordHash,
-                    // Deactivate temp USN login by keeping email (permanent USN is the new login)
-                },
-            });
+        // Update the login identifier without changing the existing password.
+        await prisma.studentProfile.update({
+            where: { id: studentProfileId },
+            data: {
+                permanentUsn,
+                isPermanentUsnLocked: true,
+                rollNumber: permanentUsn,
+            },
         });
 
         await auditLogRepository.create({

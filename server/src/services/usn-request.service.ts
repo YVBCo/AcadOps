@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../data-access/prisma.js';
 import { auditLogRepository } from '../data-access/index.js';
-import { authService } from './auth.service.js';
 
 class USNRequestService {
     // Create USN request (Teacher/Mentor requests permanent USN for a student)
@@ -103,16 +102,6 @@ class USNRequestService {
             });
             if (existing) throw new Error(`Permanent USN ${permanentUsn} is already assigned`);
 
-            // Generate new password based on permanent USN
-            const dept = await prisma.department.findUnique({
-                where: { id: request.studentProfile.user.departmentId! },
-            });
-            const deptCode = dept?.code?.toUpperCase() || 'GEN';
-            const last3 = permanentUsn.slice(-3);
-            const batchYear = request.studentProfile.admissionYear;
-            const newPassword = `${deptCode}${batchYear}${last3}`;
-            const passwordHash = await authService.hashPassword(newPassword);
-
             await prisma.$transaction(async (tx) => {
                 // Update the request
                 await tx.uSNRequest.update({
@@ -136,11 +125,6 @@ class USNRequestService {
                     },
                 });
 
-                // Reset password for permanent USN login
-                await tx.user.update({
-                    where: { id: request.studentProfile.userId },
-                    data: { passwordHash },
-                });
             });
 
             await auditLogRepository.create({
