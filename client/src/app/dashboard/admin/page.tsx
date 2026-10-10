@@ -25,6 +25,8 @@ import {
     ScrollText,
     Briefcase,
     FileCheck2,
+    Library,
+    Percent,
 } from 'lucide-react';
 import { StatCard, Card } from '@/components/ui/card';
 import { Badge, SemesterStatusBadge } from '@/components/ui/badge';
@@ -280,6 +282,26 @@ export default function AdminDashboard() {
                         subtitle="Manage student admissions"
                         iconColor="text-rose-600"
                         iconBgColor="bg-rose-50"
+                    />
+                )}
+                {isSuperAdmin && (
+                    <QuickActionCard
+                        href="/dashboard/admin/librarians"
+                        icon={Library}
+                        label="Librarians"
+                        subtitle="Create library accounts and manage access"
+                        iconColor="text-amber-600"
+                        iconBgColor="bg-amber-50"
+                    />
+                )}
+                {isSuperAdmin && (
+                    <QuickActionCard
+                        href="/dashboard/admin/nodue-attendance"
+                        icon={Percent}
+                        label="No-Due Attendance Rules"
+                        subtitle="Set subject attendance minimums and fine bands"
+                        iconColor="text-orange-600"
+                        iconBgColor="bg-orange-50"
                     />
                 )}
                 <QuickActionCard

@@ -105,6 +105,10 @@ export default function StudentNoDuePage() {
                                         <div>
                                             <p className="font-medium text-sm">{e.subject?.course?.name}</p>
                                             <p className="text-xs text-slate-500">{e.subject?.course?.code}</p>
+                                            <p className="text-xs text-slate-500">
+                                                Attendance: {e.attendancePct == null ? 'Awaiting teacher submission' : `${e.attendancePct}% (minimum ${e.subject?.noDueMinimumAttendancePct}%)`}
+                                                {Number(e.attendanceFee) > 0 ? ` · Fine ₹${e.attendanceFee}${e.attendanceFeeVerified ? ' paid' : ' due'}` : ''}
+                                            </p>
                                         </div>
                                         <Badge variant={e.clearanceStatus === 'CLEARED' ? 'success' : e.clearanceStatus === 'REJECTED' ? 'error' : 'warning'}>
                                             {e.clearanceStatus}

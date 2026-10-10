@@ -179,7 +179,11 @@ export default function NewAdmissionPage() {
             downloadAfterSave.current = false;
         },
         onError: (err: any) => {
-            toast.error(err.response?.data?.error || 'Failed to create admission');
+            const details = err.response?.data?.details;
+            const detailMessage = Array.isArray(details)
+                ? details.slice(0, 3).map((issue: { field?: string; message?: string }) => `${issue.field || 'Form'}: ${issue.message || 'Invalid value'}`).join('; ')
+                : '';
+            toast.error(detailMessage || err.response?.data?.error || 'Failed to create admission');
             downloadAfterSave.current = false;
         },
     });

@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../data-access/prisma.js';
 import { ApiError } from '../../api/middleware/error.middleware.js';
 import { auditLogRepository } from '../../data-access/index.js';
+import { nodueService } from '../nodue.service.js';
 import {
     verifySectionCourseAccess,
     getOrCreateActiveSemester,
@@ -311,6 +312,82 @@ class TeacherAttendanceService {
             },
             data: { isLocked: true }
         });
+
+        // A finalized attendance submission is the source of truth for the
+        // student's subject-level No-Due attendance assessment.
+        if (resolvedTenantId) {
+            const enrolledProfiles = await prisma.enrollment.findMany({
+                where: { subjectId: subject.id },
+                select: { studentId: true, student: { select: { userId: true, currentSemester: true } } },
+            });
+            const lockedAttendance = await prisma.attendance.findMany({
+                where: { subjectId: subject.id, isLocked: true },
+                select: { studentId: true, date: true, status: true },
+            });
+            const sessions = new Set(lockedAttendance.map(record => record.date.toISOString().slice(0, 10))).size;
+            const categories = await prisma.nodueAttendanceCategory.findMany({
+                where: { tenantId: resolvedTenantId, OR: [{ departmentId: allocation.section.departmentId }, { departmentId: null }] },
+                orderBy: [{ departmentId: 'desc' }, { minPct: 'asc' }],
+            });
+
+            for (const enrolled of enrolledProfiles) {
+                const studentUserId = enrolled.student.userId;
+                const studentAttendance = lockedAttendance.filter(record => record.studentId === enrolled.studentId);
+                const excused = studentAttendance.filter(record => record.status === 'EXCUSED').length;
+                const denominator = sessions - excused;
+                if (denominator <= 0) continue;
+
+                const attended = studentAttendance.filter(record => record.status === 'PRESENT' || record.status === 'LATE').length;
+                const attendancePct = Math.round((attended / denominator) * 10000) / 100;
+                const minimumPct = Number(subject.noDueMinimumAttendancePct);
+                const isFirstYear = (enrolled.student.currentSemester || 0) <= 2;
+                const matchingCategories = categories
+                    .filter(category => !category.isFirstYear || isFirstYear)
+                    .filter(category => Number(category.minPct) <= attendancePct && (attendancePct < Number(category.maxPct) || (attendancePct === 100 && Number(category.maxPct) === 100)))
+                    .sort((a, b) => {
+                        const departmentRank = Number(b.departmentId === allocation.section.departmentId) - Number(a.departmentId === allocation.section.departmentId);
+                        if (departmentRank !== 0) return departmentRank;
+                        return Number(b.isFirstYear) - Number(a.isFirstYear);
+                    });
+                const category = matchingCategories[0];
+                const eligible = attendancePct >= minimumPct;
+
+                await prisma.nodueSubjectEnrollment.upsert({
+                    where: { tenantId_studentId_subjectId: { tenantId: resolvedTenantId, studentId: studentUserId, subjectId: subject.id } },
+                    create: {
+                        tenantId: resolvedTenantId,
+                        studentId: studentUserId,
+                        subjectId: subject.id,
+                        teacherId: userId,
+                        semesterId: semester.id,
+                        attendancePct,
+                        attendanceFee: eligible ? 0 : Number(category?.fineAmount ?? 0),
+                        attendanceFeeVerified: false,
+                        isFacultyCleared: eligible,
+                        status: eligible ? 'COMPLETED' : 'PENDING',
+                        fineCategory: eligible ? null : category?.categoryName,
+                        remarks: eligible ? `Automatically cleared: attendance ${attendancePct}% meets ${minimumPct}% minimum` : `Attendance ${attendancePct}% is below the ${minimumPct}% minimum`,
+                    },
+                    update: {
+                        teacherId: userId,
+                        semesterId: semester.id,
+                        attendancePct,
+                        attendanceFee: eligible ? 0 : Number(category?.fineAmount ?? 0),
+                        attendanceFeeVerified: false,
+                        isFacultyCleared: eligible,
+                        status: eligible ? 'COMPLETED' : 'PENDING',
+                        fineCategory: eligible ? null : category?.categoryName,
+                        remarks: eligible ? `Automatically cleared: attendance ${attendancePct}% meets ${minimumPct}% minimum` : `Attendance ${attendancePct}% is below the ${minimumPct}% minimum`,
+                    },
+                });
+
+                const activeRequest = await prisma.nodueClearanceRequest.findFirst({
+                    where: { tenantId: resolvedTenantId, studentId: studentUserId, currentStage: 'FACULTY_REVIEW' },
+                    select: { id: true },
+                });
+                if (activeRequest) await nodueService.evaluateClearanceStage(resolvedTenantId, studentUserId);
+            }
+        }
 
         await auditLogRepository.create({
             actorId: userId,

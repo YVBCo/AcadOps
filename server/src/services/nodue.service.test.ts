@@ -29,7 +29,8 @@ describe('NoDueService tenant-scoped statistics', () => {
     it('treats waived dues as resolved when evaluating clearance stages', async () => {
         prismaMock.nodueClearanceRequest.findFirst.mockResolvedValue({ id: 3, currentStage: 'LIBRARY_REVIEW' });
         prismaMock.nodueLibraryDue.findMany.mockResolvedValue([]);
-        prismaMock.nodueStudentDue.findMany.mockResolvedValue([{ id: 8, status: 'PENDING' }]);
+        prismaMock.nodueLibraryDue.findUnique.mockResolvedValue({ hasDues: false, status: 'COMPLETED', remarks: 'Library clearance approved' });
+        prismaMock.nodueStudentDue.findMany.mockResolvedValue([]);
         prismaMock.nodueClearanceRequest.update.mockResolvedValue({ id: 3, currentStage: 'DEPARTMENT_REVIEW' });
 
         await nodueService.evaluateClearanceStage(14, 33);
@@ -39,7 +40,7 @@ describe('NoDueService tenant-scoped statistics', () => {
         });
         expect(prismaMock.nodueClearanceRequest.update).toHaveBeenCalledWith({
             where: { id: 3 },
-            data: { currentStage: 'DEPARTMENT_REVIEW' },
+            data: { currentStage: 'HOD_REVIEW' },
         });
     });
 
@@ -77,10 +78,10 @@ describe('NoDueService tenant-scoped statistics', () => {
     });
 
     it('does not create a clearance application when the student has no enrolled subjects', async () => {
-        prismaMock.nodueSubjectEnrollment.findMany.mockResolvedValue([]);
+        prismaMock.enrollment.findMany.mockResolvedValue([]);
 
         await expect(nodueService.applyClearance(14, 33)).rejects.toThrow(
-            'You must be enrolled in at least one subject before applying for clearance',
+            'You must be enrolled in at least one subject in the active semester before applying for clearance',
         );
         expect(prismaMock.nodueClearanceRequest.findFirst).not.toHaveBeenCalled();
         expect(prismaMock.nodueClearanceRequest.create).not.toHaveBeenCalled();
@@ -173,6 +174,7 @@ describe('NoDueService faculty review access', () => {
 
         expect(prismaMock.nodueSubjectEnrollment.findFirst).toHaveBeenCalledWith({
             where: { id: 9, tenantId: 14 },
+            include: { subject: { select: { noDueMinimumAttendancePct: true } } },
         });
         expect(prismaMock.nodueSubjectEnrollment.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 9 } }));
     });

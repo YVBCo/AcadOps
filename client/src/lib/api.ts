@@ -251,10 +251,15 @@ export const nodueApi = {
     createDue: async (data: any) => { const r = await api.post('/nodue/dues', data); return r.data; },
     updateDue: async (id: number, data: any) => { const r = await api.patch(`/nodue/dues/${id}`, data); return r.data; },
     getLibraryDues: async () => { const r = await api.get('/nodue/dues/library'); return r.data; },
+    getLibraryQueue: async () => { const r = await api.get('/nodue/dues/library/queue'); return r.data; },
+    approveLibraryClearance: async (studentId: number) => { const r = await api.post(`/nodue/dues/library/${studentId}/approve`); return r.data; },
     createLibraryDue: async (data: any) => { const r = await api.post('/nodue/dues/library', data); return r.data; },
     updateLibraryDue: async (id: number, data: any) => { const r = await api.patch(`/nodue/dues/library/${id}`, data); return r.data; },
     getCategories: async () => { const r = await api.get('/nodue/fines/categories'); return r.data; },
     createCategory: async (data: any) => { const r = await api.post('/nodue/fines/categories', data); return r.data; },
+    deleteCategory: async (id: number) => { await api.delete(`/nodue/fines/categories/${id}`); },
+    getAttendanceSubjects: async () => { const r = await api.get('/nodue/fines/subjects'); return r.data; },
+    updateSubjectAttendanceMinimum: async (id: number, minimumAttendancePct: number) => { const r = await api.patch(`/nodue/fines/subjects/${id}/minimum`, { minimumAttendancePct }); return r.data; },
     calculateFines: async (data: any) => { const r = await api.post('/nodue/fines/calculate', data); return r.data; },
     createPaymentOrder: async (data: any) => { const r = await api.post('/nodue/payment/create-order', data); return r.data; },
     getPaymentOrders: async () => { const r = await api.get('/nodue/payment/orders'); return r.data; },
@@ -398,6 +403,10 @@ export const userApi = {
     },
     createFirstYearCoordinator: async (data: { name: string; email: string }) => {
         const response = await api.post('/users/first-year-coordinator', data);
+        return response.data;
+    },
+    createLibrarian: async (data: { name: string; email: string }) => {
+        const response = await api.post('/users/librarian', data);
         return response.data;
     },
 };

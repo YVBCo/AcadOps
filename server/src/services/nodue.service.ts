@@ -48,8 +48,35 @@ class NodueService {
     }
 
     async applyClearance(tenantId: number, studentId: number) {
+        const academicEnrollments = await prisma.enrollment.findMany({
+            where: {
+                student: { userId: studentId, user: { tenantId } },
+                subject: { semester: { tenantId, status: 'ACTIVE' } },
+            },
+            include: { subject: { include: { teachers: { include: { teacher: { select: { userId: true } } } } } } },
+        });
+        if (academicEnrollments.length === 0) {
+            throw new ApiError(400, 'You must be enrolled in at least one subject in the active semester before applying for clearance');
+        }
+        await prisma.nodueSubjectEnrollment.createMany({
+            data: academicEnrollments.map(enrollment => ({
+                tenantId,
+                studentId,
+                subjectId: enrollment.subjectId,
+                teacherId: enrollment.subject.teachers.find(assignment => assignment.isPrimary)?.teacher.userId
+                    ?? enrollment.subject.teachers[0]?.teacher.userId
+                    ?? null,
+                semesterId: enrollment.subject.semesterId,
+            })),
+            skipDuplicates: true,
+        });
+        await prisma.nodueSubjectEnrollment.updateMany({
+            where: { tenantId, studentId, subjectId: { in: academicEnrollments.map(enrollment => enrollment.subjectId) } },
+            data: { semesterId: academicEnrollments[0].subject.semesterId },
+        });
+
         const enrollments = await prisma.nodueSubjectEnrollment.findMany({
-            where: { tenantId, studentId },
+            where: { tenantId, studentId, subjectId: { in: academicEnrollments.map(enrollment => enrollment.subjectId) } },
             select: { id: true },
         });
         if (enrollments.length === 0) {
@@ -79,11 +106,12 @@ class NodueService {
     }
 
     async getEnrollmentsForFaculty(tenantId: number, teacherId?: number) {
+        const activeSemester = await prisma.semester.findFirst({ where: { tenantId, status: 'ACTIVE' }, select: { id: true } });
         return prisma.nodueSubjectEnrollment.findMany({
-            where: { tenantId, ...(teacherId !== undefined ? { teacherId } : {}) },
+            where: { tenantId, ...(activeSemester ? { semesterId: activeSemester.id } : {}), ...(teacherId !== undefined ? { teacherId } : {}) },
             include: {
                 student: { include: { studentProfile: { select: { rollNumber: true } } } },
-                subject: { select: { id: true, course: { select: { name: true, code: true } } } }
+                subject: { select: { id: true, noDueMinimumAttendancePct: true, course: { select: { name: true, code: true } } } }
             }
         });
     }
@@ -91,9 +119,17 @@ class NodueService {
     async clearSubject(tenantId: number, enrollmentId: number, teacherId: number | undefined, data: { status: NodueDueStatus, remarks?: string }) {
         const enrollment = await prisma.nodueSubjectEnrollment.findFirst({
             where: { id: enrollmentId, tenantId, ...(teacherId !== undefined ? { teacherId } : {}) },
+            include: { subject: { select: { noDueMinimumAttendancePct: true } } },
         });
 
         if (!enrollment) throw new Error('Enrollment not found or unauthorized');
+
+        if (teacherId !== undefined && data.status === NodueDueStatus.COMPLETED) {
+            const meetsAttendanceMinimum = enrollment.attendancePct !== null && Number(enrollment.attendancePct) >= Number(enrollment.subject.noDueMinimumAttendancePct);
+            if (!meetsAttendanceMinimum && !enrollment.attendanceFeeVerified) {
+                throw new ApiError(409, 'This subject is not eligible for clearance: the attendance minimum has not been met and any assessed fine is still unpaid.');
+            }
+        }
 
         const updated = await prisma.nodueSubjectEnrollment.update({
             where: { id: enrollmentId },
@@ -109,9 +145,35 @@ class NodueService {
     }
 
     async getStudentDues(tenantId: number, studentId: number) {
-        return prisma.nodueStudentDue.findMany({
-            where: { tenantId, studentId },
-        });
+        const [collegeDues, attendanceDues, libraryDues] = await Promise.all([
+            prisma.nodueStudentDue.findMany({ where: { tenantId, studentId } }),
+            prisma.nodueSubjectEnrollment.findMany({
+                where: { tenantId, studentId, isFacultyCleared: false, attendanceFee: { gt: 0 } },
+                include: { subject: { select: { course: { select: { name: true, code: true } } } } },
+            }),
+            prisma.nodueLibraryDue.findMany({ where: { tenantId, studentId, hasDues: true, status: NodueDueStatus.PENDING } }),
+        ]);
+        return [
+            ...collegeDues,
+            ...attendanceDues.map(due => ({
+                id: `attendance-${due.id}`,
+                dueType: 'Attendance fine',
+                description: `${due.subject.course.name} (${due.subject.course.code}) · ${due.attendancePct ?? 0}% attendance${due.fineCategory ? ` · ${due.fineCategory}` : ''}`,
+                fineAmount: due.attendanceFee,
+                paidAmount: 0,
+                hasDues: true,
+                status: due.attendanceFeeVerified ? NodueDueStatus.COMPLETED : NodueDueStatus.PENDING,
+            })),
+            ...libraryDues.map(due => ({
+                id: `library-${due.id}`,
+                dueType: 'Library fine',
+                description: due.remarks || 'Outstanding library balance',
+                fineAmount: due.fineAmount,
+                paidAmount: due.paidAmount,
+                hasDues: true,
+                status: due.status,
+            })),
+        ];
     }
 
     async updateStudentDue(tenantId: number, dueId: number, data: { status?: NodueDueStatus, paidAmount?: number, remarks?: string }) {
@@ -312,14 +374,21 @@ class NodueService {
         let stage = request.currentStage;
 
         if (stage === NodueClearanceStage.FACULTY_REVIEW) {
-            const enrollments = await prisma.nodueSubjectEnrollment.findMany({ where: { tenantId, studentId } });
+            const activeSemester = await prisma.semester.findFirst({ where: { tenantId, status: 'ACTIVE' }, select: { id: true } });
+            const enrollments = await prisma.nodueSubjectEnrollment.findMany({ where: { tenantId, studentId, ...(activeSemester ? { semesterId: activeSemester.id } : {}) } });
             const allCleared = enrollments.length > 0 && enrollments.every(e => e.isFacultyCleared || e.status === NodueDueStatus.COMPLETED);
             if (allCleared) stage = NodueClearanceStage.LIBRARY_REVIEW;
         }
 
         if (stage === NodueClearanceStage.LIBRARY_REVIEW) {
             const libraryDues = await prisma.nodueLibraryDue.findMany({ where: { tenantId, studentId, hasDues: true, status: NodueDueStatus.PENDING } });
-            if (libraryDues.length === 0) stage = NodueClearanceStage.DEPARTMENT_REVIEW;
+            const libraryApproval = await prisma.nodueLibraryDue.findUnique({
+                where: { tenantId_studentId: { tenantId, studentId } },
+                select: { hasDues: true, status: true, remarks: true },
+            });
+            if (libraryDues.length === 0 && libraryApproval && !libraryApproval.hasDues && libraryApproval.status === NodueDueStatus.COMPLETED && libraryApproval.remarks === 'Library clearance approved') {
+                stage = NodueClearanceStage.DEPARTMENT_REVIEW;
+            }
         }
 
         if (stage === NodueClearanceStage.DEPARTMENT_REVIEW) {

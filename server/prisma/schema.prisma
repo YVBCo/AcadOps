@@ -576,6 +576,7 @@ model Subject {
   courseId    Int       @map("course_id")
   semesterId  Int       @map("semester_id")
   section     String?   // e.g., "A", "B"
+  noDueMinimumAttendancePct Decimal @default(75) @map("no_due_minimum_attendance_pct") @db.Decimal(5,2)
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 

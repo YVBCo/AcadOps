@@ -134,8 +134,8 @@ export default function NoDueDashboard() {
                         <QuickActionCard
                             href="/dashboard/nodue/library"
                             icon={Library}
-                            label="Library Dues"
-                            subtitle="Manage library dues and returns"
+                            label="Library Clearance"
+                            subtitle="Review and approve student library clearance"
                             iconColor="text-amber-600"
                             iconBgColor="bg-amber-50"
                         />

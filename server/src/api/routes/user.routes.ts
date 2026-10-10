@@ -71,7 +71,7 @@ router.get('/', authenticate, adminOnly, async (req: Request, res: Response, nex
         const result = await userService.getAll({
             skip: skip ? parseIntParam(skip as string, 'skip') : undefined,
             take: Math.min(take ? parseIntParam(take as string, 'take') : 50, 200),
-            role: role as 'STUDENT' | 'TEACHER' | 'DEPARTMENT_ADMIN' | 'SUPER_ADMIN' | undefined,
+            role: role as UserRole | undefined,
             departmentId: deptFilter,
             tenantId: req.user!.tenantId,
         });
@@ -368,6 +368,25 @@ router.post('/first-year-coordinator', authenticate, superAdminOnly, async (req:
     } catch (error: unknown) {
         if (error instanceof ZodError) return next(error);
         res.status(400).json({ error: getCreationErrorMessage(error, 'Failed to create first year coordinator') });
+    }
+});
+
+// POST /api/users/librarian - Create a Librarian with emailed credentials (Super Admin only)
+router.post('/librarian', authenticate, superAdminOnly, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data = z.object({ email: z.string().email(), name: z.string().min(2) }).parse(req.body);
+        const result = await userService.createWithEmailNotification(
+            { ...data, role: 'LIBRARIAN', tenantId: req.user!.tenantId },
+            req.user!.userId
+        );
+        const { passwordHash: _, ...userWithoutPassword } = result.user;
+        res.status(201).json({
+            ...userWithoutPassword,
+            message: `Librarian created. Welcome email with credentials sent to ${data.email}`,
+        });
+    } catch (error: unknown) {
+        if (error instanceof ZodError) return next(error);
+        res.status(400).json({ error: getCreationErrorMessage(error, 'Failed to create librarian') });
     }
 });
 

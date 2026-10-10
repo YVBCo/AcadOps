@@ -82,6 +82,59 @@ router.get('/library', authenticate, requireRole('LIBRARIAN', 'SUPER_ADMIN'), as
     }
 });
 
+router.get('/library/queue', authenticate, requireRole('LIBRARIAN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const requests = await prisma.nodueClearanceRequest.findMany({
+            where: { tenantId: req.tenantId!, currentStage: 'LIBRARY_REVIEW' },
+            include: { student: { include: { studentProfile: { select: { rollNumber: true } } } } },
+            orderBy: { updatedAt: 'asc' },
+        });
+        const students = await Promise.all(requests.map(async (request) => ({
+            ...request,
+            libraryRecord: await prisma.nodueLibraryDue.findUnique({
+                where: { tenantId_studentId: { tenantId: req.tenantId!, studentId: request.studentId } },
+            }),
+        })));
+        res.json(students);
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/library/:studentId/approve', authenticate, requireRole('LIBRARIAN', 'SUPER_ADMIN'), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const studentId = Number(req.params.studentId);
+        if (!Number.isInteger(studentId) || studentId <= 0) {
+            res.status(400).json({ error: 'Invalid student ID' });
+            return;
+        }
+        const request = await prisma.nodueClearanceRequest.findFirst({
+            where: { tenantId: req.tenantId!, studentId, currentStage: 'LIBRARY_REVIEW' },
+        });
+        if (!request) {
+            res.status(409).json({ error: 'This student does not currently require library review' });
+            return;
+        }
+        const due = await prisma.nodueLibraryDue.findUnique({
+            where: { tenantId_studentId: { tenantId: req.tenantId!, studentId } },
+        });
+        if (due?.hasDues && due.status !== NodueDueStatus.COMPLETED) {
+            res.status(409).json({ error: 'Resolve the outstanding library balance before approving clearance' });
+            return;
+        }
+        const libraryRecord = await prisma.nodueLibraryDue.upsert({
+            where: { tenantId_studentId: { tenantId: req.tenantId!, studentId } },
+            update: { hasDues: false, status: NodueDueStatus.COMPLETED, remarks: 'Library clearance approved' },
+            create: { tenantId: req.tenantId!, studentId, hasDues: false, status: NodueDueStatus.COMPLETED, remarks: 'Library clearance approved' },
+        });
+        await nodueService.logActivity(req.tenantId!, req.user!.userId, req.user!.role, 'LIBRARY_CLEARANCE_APPROVED', 'Library clearance approved for student', request.id);
+        await nodueService.evaluateClearanceStage(req.tenantId!, studentId);
+        res.json(libraryRecord);
+    } catch (error) {
+        next(error);
+    }
+});
+
 const createLibraryDueSchema = z.object({
     studentId: z.number().int().positive(),
     fineAmount: z.number().nonnegative(),

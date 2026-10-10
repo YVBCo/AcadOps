@@ -174,6 +174,11 @@ describe('TeacherAttendanceService', () => {
         it('should lock all unlocked attendance for the date', async () => {
             prismaMock.subject.findFirst.mockResolvedValue({ id: 10 });
             prismaMock.attendance.updateMany.mockResolvedValue({ count: 30 });
+            // No-Due attendance evaluation has no enrolled students in this
+            // test, so keep its newly added reads explicit and isolated.
+            prismaMock.enrollment.findMany.mockResolvedValue([]);
+            prismaMock.attendance.findMany.mockResolvedValue([]);
+            prismaMock.nodueAttendanceCategory.findMany.mockResolvedValue([]);
 
             const result = await teacherAttendanceService.submitAttendance(
                 100, 1, 1, new Date('2026-05-08'), 1

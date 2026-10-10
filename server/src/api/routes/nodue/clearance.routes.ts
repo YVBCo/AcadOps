@@ -9,11 +9,32 @@ const router = Router();
 
 router.get('/status', authenticate, requireRole('STUDENT'), async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const activeSemester = await prisma.semester.findFirst({ where: { tenantId: req.tenantId!, status: 'ACTIVE' }, select: { id: true } });
+        if (activeSemester) {
+            const academicEnrollments = await prisma.enrollment.findMany({
+                where: { student: { userId: req.user!.userId, user: { tenantId: req.tenantId! } }, subject: { semesterId: activeSemester.id } },
+                include: { subject: { include: { teachers: { include: { teacher: { select: { userId: true } } } } } } },
+            });
+            await prisma.nodueSubjectEnrollment.createMany({
+                data: academicEnrollments.map(enrollment => ({
+                    tenantId: req.tenantId!,
+                    studentId: req.user!.userId,
+                    subjectId: enrollment.subjectId,
+                    semesterId: activeSemester.id,
+                    teacherId: enrollment.subject.teachers.find(assignment => assignment.isPrimary)?.teacher.userId ?? enrollment.subject.teachers[0]?.teacher.userId ?? null,
+                })),
+                skipDuplicates: true,
+            });
+            await prisma.nodueSubjectEnrollment.updateMany({
+                where: { tenantId: req.tenantId!, studentId: req.user!.userId, subjectId: { in: academicEnrollments.map(enrollment => enrollment.subjectId) } },
+                data: { semesterId: activeSemester.id },
+            });
+        }
         const [status, enrollments] = await Promise.all([
             nodueService.getClearanceRequest(req.tenantId!, req.user!.userId),
             prisma.nodueSubjectEnrollment.findMany({
-                where: { tenantId: req.tenantId!, studentId: req.user!.userId },
-                include: { subject: { select: { id: true, course: { select: { name: true, code: true } } } } },
+                where: { tenantId: req.tenantId!, studentId: req.user!.userId, ...(activeSemester ? { semesterId: activeSemester.id } : {}) },
+                include: { subject: { select: { id: true, noDueMinimumAttendancePct: true, course: { select: { name: true, code: true } } } } },
             }),
         ]);
         res.json({ ...status, enrollments: enrollments.map(enrollment => ({ ...enrollment, clearanceStatus: enrollment.status })) });
