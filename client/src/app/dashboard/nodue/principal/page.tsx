@@ -22,6 +22,7 @@ export default function PrincipalNoDuePage() {
         onSuccess: () => {
             toast.success('Clearance approved');
             queryClient.invalidateQueries({ queryKey: ['nodue', 'clearances', 'principal'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
         },
         onError: (error: any) => toast.error(error.response?.data?.error || 'Failed to approve clearance'),
     });

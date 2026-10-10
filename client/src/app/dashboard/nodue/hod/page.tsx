@@ -24,6 +24,7 @@ export default function HODNoDuePage() {
         onSuccess: () => {
             toast.success('Clearance approved by HOD');
             queryClient.invalidateQueries({ queryKey: ['nodue', 'clearances', 'hod'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
         },
         onError: () => toast.error('Failed to approve clearance')
     });

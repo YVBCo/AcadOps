@@ -33,6 +33,7 @@ export default function FacultyNoDuePage() {
         onSuccess: () => {
             toast.success('Student cleared successfully');
             queryClient.invalidateQueries({ queryKey: ['nodue', 'enrollments', 'mystudents'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
         },
         onError: () => toast.error('Failed to clear student')
     });
@@ -42,6 +43,7 @@ export default function FacultyNoDuePage() {
         onSuccess: () => {
             toast.success('Student rejected');
             queryClient.invalidateQueries({ queryKey: ['nodue', 'enrollments', 'mystudents'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
         },
         onError: () => toast.error('Failed to reject student')
     });
