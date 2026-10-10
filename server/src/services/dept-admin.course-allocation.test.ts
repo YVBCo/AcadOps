@@ -6,7 +6,7 @@ vi.mock('../data-access/prisma.js', () => ({ prisma: prismaMock, default: prisma
 
 const mockCourseAllocationRepository = { upsert: vi.fn() };
 const mockCourseRepository = { findById: vi.fn() };
-const mockSectionRepository = { findById: vi.fn() };
+const mockSectionRepository = { findById: vi.fn(), findByDepartmentAndBatch: vi.fn() };
 const mockAuditLogRepository = { create: vi.fn() };
 
 vi.mock('../data-access/index.js', () => ({
@@ -58,5 +58,26 @@ describe('Department Admin course allocation', () => {
             ],
             skipDuplicates: true,
         });
+    });
+
+    it('materializes No-Due enrollments for every section in a batch allocation', async () => {
+        mockCourseRepository.findById.mockResolvedValue(createMockCourse({
+            id: 21, tenantId: 8, isLocked: true,
+        }));
+        mockSectionRepository.findByDepartmentAndBatch.mockResolvedValue([
+            { id: 12, name: 'A' }, { id: 13, name: 'B' },
+        ]);
+        mockCourseAllocationRepository.upsert.mockResolvedValue({ id: 31 });
+        prismaMock.semester.findFirst.mockResolvedValue({ id: 5 });
+        prismaMock.studentProfile.findMany.mockResolvedValue([{ id: 41 }]);
+        prismaMock.subject.upsert.mockResolvedValue({ id: 51 });
+        prismaMock.enrollment.createMany.mockResolvedValue({ count: 1 });
+
+        await deptAdminService.allocateCourseToAllSections(21, 4, 1, 3, 99);
+
+        expect(mockCourseAllocationRepository.upsert).toHaveBeenCalledTimes(2);
+        expect(prismaMock.subject.upsert).toHaveBeenCalledTimes(2);
+        expect(prismaMock.enrollment.createMany).toHaveBeenCalledTimes(2);
+        expect(prismaMock.nodueSubjectEnrollment.createMany).toHaveBeenCalledTimes(2);
     });
 });

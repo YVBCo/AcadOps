@@ -6,6 +6,61 @@ import { userService } from './user.service.js';
 import { emailService } from './email.service.js';
 import { syncNoDueSubjectEnrollments } from './nodue-enrollment.sync.js';
 
+async function materializeSectionCourse(
+    course: { id: number; tenantId: number },
+    section: { id: number; name: string },
+    semesterNumber: number,
+    teacherId: number | null
+) {
+    // An allocation must materialize the semester subject and its student
+    // enrollments too. Student section assignment cannot do this when the
+    // course is added after students have already been assigned.
+    const [semester, allocatedStudents] = await Promise.all([
+        prisma.semester.findFirst({
+            where: { tenantId: course.tenantId, status: 'ACTIVE' },
+            orderBy: { startDate: 'desc' },
+            select: { id: true },
+        }),
+        prisma.studentProfile.findMany({
+            where: {
+                sectionId: section.id,
+                currentSemester: semesterNumber,
+                user: { tenantId: course.tenantId },
+            },
+            select: { id: true },
+        }),
+    ]);
+
+    if (!semester) return;
+
+    const subject = await prisma.subject.upsert({
+        where: {
+            courseId_semesterId_section: {
+                courseId: course.id,
+                semesterId: semester.id,
+                section: section.name,
+            },
+        },
+        create: { courseId: course.id, semesterId: semester.id, section: section.name },
+        update: {},
+    });
+
+    await prisma.enrollment.createMany({
+        data: allocatedStudents.map(student => ({ subjectId: subject.id, studentId: student.id })),
+        skipDuplicates: true,
+    });
+
+    const teacherUserId = teacherId
+        ? (await prisma.teacherProfile.findUnique({ where: { id: teacherId }, select: { userId: true } }))?.userId
+        : undefined;
+    await syncNoDueSubjectEnrollments(prisma, {
+        tenantId: course.tenantId,
+        subjectId: subject.id,
+        studentProfileIds: allocatedStudents.map(student => student.id),
+        teacherUserId,
+    });
+}
+
 class DeptAdminService {
     /**
      * Get students for a department grouped by batch
@@ -145,52 +200,7 @@ class DeptAdminService {
             teacherId,
         });
 
-        // An allocation must materialize the semester subject and its student
-        // enrollments too. Student section assignment cannot do this when the
-        // course is added after students have already been assigned.
-        const [semester, allocatedStudents] = await Promise.all([
-            prisma.semester.findFirst({
-                where: { tenantId: course.tenantId, status: 'ACTIVE' },
-                orderBy: { startDate: 'desc' },
-                select: { id: true },
-            }),
-            prisma.studentProfile.findMany({
-                where: {
-                    sectionId: section.id,
-                    currentSemester: semesterNumber,
-                    user: { tenantId: course.tenantId },
-                },
-                select: { id: true },
-            }),
-        ]);
-
-        if (semester) {
-            const subject = await prisma.subject.upsert({
-                where: {
-                    courseId_semesterId_section: {
-                        courseId,
-                        semesterId: semester.id,
-                        section: section.name,
-                    },
-                },
-                create: { courseId, semesterId: semester.id, section: section.name },
-                update: {},
-            });
-
-            await prisma.enrollment.createMany({
-                data: allocatedStudents.map(student => ({ subjectId: subject.id, studentId: student.id })),
-                skipDuplicates: true,
-            });
-
-            await syncNoDueSubjectEnrollments(prisma, {
-                tenantId: course.tenantId,
-                subjectId: subject.id,
-                studentProfileIds: allocatedStudents.map(student => student.id),
-                teacherUserId: teacherId
-                    ? (await prisma.teacherProfile.findUnique({ where: { id: teacherId }, select: { userId: true } }))?.userId
-                    : undefined,
-            });
-        }
+        await materializeSectionCourse(course, section, semesterNumber, teacherId);
 
         await auditLogRepository.create({
             actorId,
@@ -239,6 +249,7 @@ class DeptAdminService {
                 teacherId: null,  // Teacher assigned separately per section
             });
             allocations.push(allocation);
+            await materializeSectionCourse(course, section, semesterNumber, null);
         }
 
         // Audit log
