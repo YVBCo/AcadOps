@@ -145,6 +145,53 @@ class DeptAdminService {
             teacherId,
         });
 
+        // An allocation must materialize the semester subject and its student
+        // enrollments too. Student section assignment cannot do this when the
+        // course is added after students have already been assigned.
+        const [semester, allocatedStudents] = await Promise.all([
+            prisma.semester.findFirst({
+                where: { tenantId: course.tenantId, status: 'ACTIVE' },
+                orderBy: { startDate: 'desc' },
+                select: { id: true },
+            }),
+            prisma.studentProfile.findMany({
+                where: {
+                    sectionId: section.id,
+                    currentSemester: semesterNumber,
+                    user: { tenantId: course.tenantId },
+                },
+                select: { id: true },
+            }),
+        ]);
+
+        if (semester) {
+            const subject = await prisma.subject.upsert({
+                where: {
+                    courseId_semesterId_section: {
+                        courseId,
+                        semesterId: semester.id,
+                        section: section.name,
+                    },
+                },
+                create: { courseId, semesterId: semester.id, section: section.name },
+                update: {},
+            });
+
+            await prisma.enrollment.createMany({
+                data: allocatedStudents.map(student => ({ subjectId: subject.id, studentId: student.id })),
+                skipDuplicates: true,
+            });
+
+            await syncNoDueSubjectEnrollments(prisma, {
+                tenantId: course.tenantId,
+                subjectId: subject.id,
+                studentProfileIds: allocatedStudents.map(student => student.id),
+                teacherUserId: teacherId
+                    ? (await prisma.teacherProfile.findUnique({ where: { id: teacherId }, select: { userId: true } }))?.userId
+                    : undefined,
+            });
+        }
+
         await auditLogRepository.create({
             actorId,
             action: 'ALLOCATE_COURSE_TO_SECTION',
