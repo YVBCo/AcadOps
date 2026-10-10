@@ -17,15 +17,19 @@ import { join } from 'path';
 function run(cmd, silent = false) {
     try {
         const output = execSync(cmd, {
-            stdio: silent ? 'pipe' : 'inherit',
+            encoding: 'utf8',
+            stdio: 'pipe',
             env: { ...process.env, NODE_NO_WARNINGS: '1' },
         });
-        return { success: true, output: output?.toString() || '' };
+        if (!silent && output) process.stdout.write(output);
+        return { success: true, output: output || '' };
     } catch (err) {
+        const output = `${err.stdout?.toString() || ''}${err.stderr?.toString() || ''}`;
+        if (!silent && output) process.stderr.write(output);
         return {
             success: false,
-            output: err.stdout?.toString() || '',
-            error: err.stderr?.toString() || err.message || '',
+            output,
+            error: output || err.message || '',
         };
     }
 }
