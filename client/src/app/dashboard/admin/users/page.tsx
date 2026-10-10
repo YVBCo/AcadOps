@@ -152,7 +152,9 @@ export default function UsersPage() {
     });
 
     const { data: deptStudentsData } = useQuery({
-        queryKey: ['deptStudents', selectedDept?.id, selectedBatch?.id, currentUser?.departmentId],
+        queryKey: selectedDept?.id === -1
+            ? ['allBatchStudents', selectedBatch?.id]
+            : ['deptStudents', selectedDept?.id, selectedBatch?.id, currentUser?.departmentId],
         queryFn: async () => {
             if (selectedDept?.id === -1 && selectedBatch) {
                 const profiles = await batchApi.getStudents(selectedBatch.id);
