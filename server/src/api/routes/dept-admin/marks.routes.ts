@@ -146,6 +146,7 @@ router.post('/internal-marks/recalculate', async (req: Request, res: Response, n
     try {
         const user = req.user!;
         const { courseId, semesterNumber } = req.body;
+        const departmentId = getDepartmentId(req);
 
         if (!courseId) {
             return res.status(400).json({ error: 'courseId is required' });
@@ -154,7 +155,8 @@ router.post('/internal-marks/recalculate', async (req: Request, res: Response, n
         const result = await internalAssessmentService.recalculateAllMarks(
             courseId,
             semesterNumber || 1,
-            user.userId
+            user.userId,
+            departmentId
         );
 
         res.json({ message: `Recalculated marks for ${result.updated} students`, ...result });

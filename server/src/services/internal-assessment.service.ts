@@ -420,8 +420,17 @@ class InternalAssessmentService {
     async recalculateAllMarks(
         courseId: number,
         semesterNumber: number,
-        actorId: number
+        actorId: number,
+        departmentId: number
     ): Promise<{ updated: number }> {
+        const course = await prisma.course.findFirst({
+            where: { id: courseId, departmentId },
+            select: { id: true },
+        });
+        if (!course) {
+            throw new Error('Course not found in your department');
+        }
+
         const config = await this.getConfig(courseId, semesterNumber);
         if (!config) {
             throw new Error('No IA configuration found for this course/semester');
@@ -429,7 +438,7 @@ class InternalAssessmentService {
 
         // Get all marks records for this course
         const allMarks = await prisma.internalMarksDetail.findMany({
-            where: { courseId },
+            where: { courseId, section: { departmentId } },
         });
 
         let updated = 0;

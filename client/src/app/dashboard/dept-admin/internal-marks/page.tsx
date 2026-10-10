@@ -11,6 +11,7 @@ import {
     Save,
     Send,
     Lock,
+    Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ interface Course {
     id: number;
     name: string;
     code: string;
+    semesterNumber?: number;
 }
 
 export default function InternalMarksPage() {
@@ -60,6 +62,7 @@ export default function InternalMarksPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editReason, setEditReason] = useState('');
     const [editValues, setEditValues] = useState<Partial<InternalMark>>({});
+    const [recalculating, setRecalculating] = useState(false);
 
     useEffect(() => {
         fetchFilters();
@@ -164,6 +167,29 @@ export default function InternalMarksPage() {
         }
     };
 
+    const handleRecalculate = async () => {
+        if (!selectedCourse) {
+            setError('Please select a course');
+            return;
+        }
+
+        setError(null);
+        setRecalculating(true);
+        try {
+            const response = await api.post('/dept-admin/internal-marks/recalculate', {
+                courseId: selectedCourse,
+                semesterNumber: courses.find(course => course.id === selectedCourse)?.semesterNumber || 1,
+            });
+            setSuccess(response.data.message || 'Marks recalculated successfully');
+            await fetchMarks();
+            setTimeout(() => setSuccess(null), 3000);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Failed to recalculate marks');
+        } finally {
+            setRecalculating(false);
+        }
+    };
+
     const hasUnfinalizedMarks = marks.some(m => !m.isFinalized);
 
     return (
@@ -176,6 +202,10 @@ export default function InternalMarksPage() {
                 </div>
                 {selectedSection && selectedCourse && (
                     <div className="flex gap-2">
+                        <Button onClick={handleRecalculate} variant="outline" disabled={recalculating}>
+                            <Calculator className="h-4 w-4 mr-2" />
+                            {recalculating ? 'Recalculating…' : 'Recalculate Totals'}
+                        </Button>
                         {hasUnfinalizedMarks && (
                             <Button onClick={handleFinalize} variant="outline">
                                 <Lock className="h-4 w-4 mr-2" />
