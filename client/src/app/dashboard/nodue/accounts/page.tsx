@@ -3,16 +3,21 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import DashboardShell from '@/components/layout/DashboardShell';
-import { nodueApi } from '@/lib/api';
+import { nodueApi, studentApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Search, Plus, Edit } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 
 export default function AccountsNoDuePage() {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
+    const [showAddDue, setShowAddDue] = useState(false);
+    const [studentId, setStudentId] = useState('');
+    const [dueType, setDueType] = useState('COLLEGE_FEE');
+    const [amount, setAmount] = useState('');
+    const [description, setDescription] = useState('');
 
     const { data: dues, isLoading } = useQuery({
         queryKey: ['nodue', 'dues', 'all'],
@@ -28,26 +33,54 @@ export default function AccountsNoDuePage() {
         onError: () => toast.error('Failed to update due')
     });
 
+    const { data: studentResponse, isLoading: studentsLoading } = useQuery({
+        queryKey: ['nodue', 'students', 'due-form'],
+        queryFn: () => studentApi.getStudents({ take: 500 }),
+        enabled: showAddDue,
+    });
+
+    const createDueMutation = useMutation({
+        mutationFn: (data: { studentId: number; dueType: string; fineAmount: number; description?: string }) => nodueApi.createDue(data),
+        onSuccess: () => {
+            toast.success('Due added successfully');
+            setShowAddDue(false);
+            setStudentId('');
+            setDueType('COLLEGE_FEE');
+            setAmount('');
+            setDescription('');
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'dues', 'all'] });
+            queryClient.invalidateQueries({ queryKey: ['nodue', 'stats'] });
+        },
+        onError: (error: any) => toast.error(error.response?.data?.error || 'Failed to add due'),
+    });
+
     const handleUpdateStatus = (due: any, status: string) => {
         updateDueMutation.mutate({ id: due.id, data: { status, ...(status === 'COMPLETED' ? { paidAmount: Number(due.fineAmount) } : {}) } });
     };
 
-    const handleAddDue = async () => {
-        const studentId = Number(prompt('Student user ID:'));
-        if (!Number.isInteger(studentId) || studentId <= 0) return;
-        const dueType = prompt('Due type (e.g. COLLEGE_FEE):', 'COLLEGE_FEE');
-        if (!dueType?.trim()) return;
-        const amount = Number(prompt('Amount due:'));
-        if (!Number.isFinite(amount) || amount < 0) return;
-        const description = prompt('Description (optional):') || undefined;
-        try {
-            await nodueApi.createDue({ studentId, dueType: dueType.trim(), fineAmount: amount, description });
-            toast.success('Due added successfully');
-            queryClient.invalidateQueries({ queryKey: ['nodue', 'dues', 'all'] });
-        } catch (error: any) {
-            toast.error(error.response?.data?.error || 'Failed to add due');
+    const handleAddDue = () => {
+        const parsedAmount = Number(amount);
+        if (!studentId) {
+            toast.error('Select a student');
+            return;
         }
+        if (!dueType.trim()) {
+            toast.error('Enter a due category');
+            return;
+        }
+        if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+            toast.error('Enter a valid non-negative amount');
+            return;
+        }
+        createDueMutation.mutate({
+            studentId: Number(studentId),
+            dueType: dueType.trim(),
+            fineAmount: parsedAmount,
+            description: description.trim() || undefined,
+        });
     };
+
+    const students = studentResponse?.users || [];
 
     const filtered = dues?.filter((d: any) => 
         d.student?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -74,7 +107,7 @@ export default function AccountsNoDuePage() {
                                 className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
                             />
                         </div>
-                        <Button onClick={handleAddDue}><Plus className="w-4 h-4 mr-1" /> Add Due</Button>
+                        <Button onClick={() => setShowAddDue(true)}><Plus className="w-4 h-4 mr-1" /> Add Due</Button>
                     </div>
                 </div>
 
@@ -127,6 +160,46 @@ export default function AccountsNoDuePage() {
                         </table>
                     </div>
                 </Card>
+                {showAddDue && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="add-due-title">
+                        <Card className="w-full max-w-lg space-y-4 p-6">
+                            <div>
+                                <h2 id="add-due-title" className="text-lg font-semibold text-slate-800">Add student due</h2>
+                                <p className="mt-1 text-sm text-slate-600">Record an outstanding college due for a student.</p>
+                            </div>
+                            <label className="block text-sm font-medium text-slate-700" htmlFor="due-student">Student</label>
+                            <select id="due-student" value={studentId} onChange={event => setStudentId(event.target.value)} disabled={studentsLoading} className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm">
+                                <option value="">{studentsLoading ? 'Loading students…' : 'Select a student'}</option>
+                                {students.map((student: any) => (
+                                    <option key={student.id} value={student.id}>
+                                        {student.name} — {student.studentProfile?.rollNumber || student.email}
+                                    </option>
+                                ))}
+                            </select>
+                            {!studentsLoading && students.length === 0 && <p className="text-sm text-red-600">No students found in this tenant.</p>}
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="due-type">Category</label>
+                                    <input id="due-type" value={dueType} onChange={event => setDueType(event.target.value)} maxLength={80} className="w-full rounded-lg border border-slate-300 p-3 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="due-amount">Amount (₹)</label>
+                                    <input id="due-amount" type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} className="w-full rounded-lg border border-slate-300 p-3 text-sm" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="due-description">Description (optional)</label>
+                                <textarea id="due-description" value={description} onChange={event => setDescription(event.target.value)} maxLength={500} rows={2} className="w-full rounded-lg border border-slate-300 p-3 text-sm" placeholder="For example: QA test due; remove after verification" />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setShowAddDue(false)}>Cancel</Button>
+                                <Button onClick={handleAddDue} disabled={createDueMutation.isPending || studentsLoading || students.length === 0}>
+                                    {createDueMutation.isPending ? 'Saving…' : 'Add Due'}
+                                </Button>
+                            </div>
+                        </Card>
+                    </div>
+                )}
             </div>
         </DashboardShell>
     );
