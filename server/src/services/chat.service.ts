@@ -1,4 +1,5 @@
 import { ChatStatus, Prisma } from '@prisma/client';
+import { ApiError } from '../api/middleware/error.middleware.js';
 import { prisma } from '../data-access/prisma.js';
 import { logger } from '../utils/logger.js';
 
@@ -21,7 +22,7 @@ class ChatService {
             where: { userId: parentUserId },
         });
         if (!parentProfile || parentProfile.studentProfileId !== studentProfileId) {
-            throw new Error('You do not have access to this student');
+            throw new ApiError(403, 'You do not have access to this student');
         }
 
         // Find active mentor assignment for this student
@@ -34,7 +35,7 @@ class ChatService {
         });
 
         if (!mentorAssignment) {
-            throw new Error('No mentor is currently assigned to your child. Please contact the department.');
+            throw new ApiError(409, 'No mentor is currently assigned to your child. Please contact the department.');
         }
 
         const mentorUserId = mentorAssignment.teacherProfile.user.id;
