@@ -343,11 +343,12 @@ export default function DeptAdminCoursesPage() {
     const [filterSemester, setFilterSemester] = useState<number | null>(null);
     const [expandedCourse, setExpandedCourse] = useState<number | null>(null);
 
-    // Fetch courses for the department admin's department
+    // Department admins see their department; Super Admins see the tenant catalog.
+    const departmentId = user?.role === 'SUPER_ADMIN' ? undefined : user?.departmentId;
     const { data: courses = [], isLoading } = useQuery<Course[]>({
-        queryKey: ['courses', { departmentId: user?.departmentId }],
-        queryFn: () => courseApi.getAll({ departmentId: user?.departmentId }),
-        enabled: !!user?.departmentId,
+        queryKey: ['courses', user?.tenantId, user?.role, departmentId],
+        queryFn: () => courseApi.getAll(departmentId ? { departmentId } : undefined),
+        enabled: user?.role === 'SUPER_ADMIN' || !!departmentId,
     });
 
     const filteredCourses = courses.filter((course: Course) => {
