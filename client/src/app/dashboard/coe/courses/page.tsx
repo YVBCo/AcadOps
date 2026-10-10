@@ -26,6 +26,7 @@ interface Course {
     credits: number;
     departmentId: number;
     semesterNumber?: number;
+    targetBatchId?: number | null;
     internalMarks: number;
     externalMarks: number;
     isLocked: boolean;
@@ -43,6 +44,7 @@ export default function COECoursesPage() {
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+    const [courseToLock, setCourseToLock] = useState<Course | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDept, setFilterDept] = useState<number | null>(null);
 
@@ -158,9 +160,7 @@ export default function COECoursesPage() {
     };
 
     const handleLock = (course: Course) => {
-        if (confirm(`Are you sure you want to lock "${course.name}"? This cannot be undone.`)) {
-            lockMutation.mutate(course.id);
-        }
+        setCourseToLock(course);
     };
 
     const filteredCourses = courses.filter((course: Course) => {
@@ -330,6 +330,58 @@ export default function COECoursesPage() {
                         </tbody>
                     </table>
                 </Card>
+            )}
+
+            {courseToLock && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        aria-label="Close lock confirmation"
+                        onClick={() => setCourseToLock(null)}
+                        disabled={lockMutation.isPending}
+                    />
+                    <section
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="lock-course-title"
+                        className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="rounded-full bg-amber-100 p-2 text-amber-700">
+                                <Lock className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h2 id="lock-course-title" className="text-lg font-semibold text-neutral-900">Lock course?</h2>
+                                <p className="mt-2 text-sm text-neutral-600">
+                                    Lock <strong>{courseToLock.name}</strong>? A locked course cannot be edited.
+                                    {courseToLock.targetBatchId
+                                        ? ' It will be assigned to its target batch.'
+                                        : ' You can allocate it to sections from Section Management.'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setCourseToLock(null)}
+                                disabled={lockMutation.isPending}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => lockMutation.mutate(courseToLock.id, {
+                                    onSuccess: () => setCourseToLock(null),
+                                })}
+                                disabled={lockMutation.isPending}
+                            >
+                                {lockMutation.isPending ? 'Locking…' : 'Lock Course'}
+                            </Button>
+                        </div>
+                    </section>
+                </div>
             )}
 
             {/* Create/Edit Modal */}
