@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Search, CheckCircle, XCircle } from 'lucide-react';
 
+function getClearanceStatus(enrollment: { clearanceStatus?: string; status?: string }) {
+    const status = enrollment.clearanceStatus ?? enrollment.status;
+    if (status === 'COMPLETED') return 'CLEARED';
+    if (status === 'WAIVED') return 'REJECTED';
+    return status ?? 'UNKNOWN';
+}
+
 export default function FacultyNoDuePage() {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
@@ -93,7 +100,9 @@ export default function FacultyNoDuePage() {
                                 ) : filtered.length === 0 ? (
                                     <tr><td colSpan={5} className="py-8 text-center text-slate-500">No students found requiring review.</td></tr>
                                 ) : (
-                                    filtered.map((enrollment: any) => (
+                                    filtered.map((enrollment: any) => {
+                                        const clearanceStatus = getClearanceStatus(enrollment);
+                                        return (
                                         <tr key={enrollment.id} className="hover:bg-slate-50/50">
                                             <td className="py-3 px-4">
                                                 <div className="font-medium text-slate-800">{enrollment.student?.name}</div>
@@ -103,12 +112,12 @@ export default function FacultyNoDuePage() {
                                                 {enrollment.subject?.course?.name} ({enrollment.subject?.course?.code})
                                             </td>
                                             <td className="py-3 px-4">
-                                                <Badge variant={enrollment.clearanceStatus === 'CLEARED' ? 'success' : enrollment.clearanceStatus === 'REJECTED' ? 'error' : 'warning'}>
-                                                    {enrollment.clearanceStatus}
+                                                <Badge variant={clearanceStatus === 'CLEARED' ? 'success' : clearanceStatus === 'REJECTED' ? 'error' : 'warning'}>
+                                                    {clearanceStatus}
                                                 </Badge>
                                             </td>
                                             <td className="py-3 px-4">
-                                                {enrollment.clearanceStatus === 'PENDING' && (
+                                                {clearanceStatus === 'PENDING' && (
                                                     <div className="flex items-center gap-2">
                                                         <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50" onClick={() => handleClear(enrollment.id)}>
                                                             <CheckCircle className="w-3.5 h-3.5 mr-1" /> Clear
@@ -118,12 +127,12 @@ export default function FacultyNoDuePage() {
                                                         </Button>
                                                     </div>
                                                 )}
-                                                {enrollment.clearanceStatus !== 'PENDING' && (
+                                                {clearanceStatus !== 'PENDING' && (
                                                     <span className="text-xs text-slate-500">{enrollment.clearanceRemarks || 'No remarks'}</span>
                                                 )}
                                             </td>
                                         </tr>
-                                    ))
+                                    )})
                                 )}
                             </tbody>
                         </table>
