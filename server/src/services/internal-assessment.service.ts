@@ -436,9 +436,24 @@ class InternalAssessmentService {
             throw new Error('No IA configuration found for this course/semester');
         }
 
-        // Get all marks records for this course
+        // Resolve the department's section IDs first. Besides making the scope
+        // explicit, this avoids relying on a nested relation filter that has
+        // returned a database error for existing finalized rows in production.
+        const departmentSections = await prisma.section.findMany({
+            where: { departmentId },
+            select: { id: true },
+        });
+
+        if (departmentSections.length === 0) {
+            return { updated: 0 };
+        }
+
+        // Get only this department's marks for the selected course.
         const allMarks = await prisma.internalMarksDetail.findMany({
-            where: { courseId, section: { departmentId } },
+            where: {
+                courseId,
+                sectionId: { in: departmentSections.map(section => section.id) },
+            },
         });
 
         let updated = 0;
