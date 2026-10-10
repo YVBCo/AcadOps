@@ -26,7 +26,14 @@ describe('userRepository department filtering for student profiles', () => {
                     OR: [
                         { optedDepartmentId: 8 },
                         { cycleDepartmentId: 8, currentSemester: { lte: 2 } },
-                        { optedDepartmentId: null, cycleDepartmentId: null, user: { departmentId: 8 } },
+                        {
+                            optedDepartmentId: null,
+                            OR: [
+                                { cycleDepartmentId: null },
+                                { currentSemester: { gt: 2 } },
+                            ],
+                            user: { departmentId: 8 },
+                        },
                     ],
                     batchId: 22,
                 },
@@ -42,7 +49,9 @@ describe('userRepository department filtering for student profiles', () => {
         ]);
 
         const [query, batchId, tenantId] = prismaMock.$queryRaw.mock.calls[0];
-        expect(query.join('')).toContain('COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id)');
+        expect(query.join('')).toContain('CASE WHEN sp.current_semester <= 2 THEN sp.cycle_department_id END');
+        expect(query.join('')).toContain("u.role = 'STUDENT'");
+        expect(query.join('')).toContain("LEFT(LOWER(u.email), 8) <> 'deleted_'");
         expect([batchId, tenantId]).toEqual([22, 14]);
     });
 });

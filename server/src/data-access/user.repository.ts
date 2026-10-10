@@ -209,17 +209,32 @@ export const userRepository = {
 
     // Get student counts grouped by department for a given batch (filtered by tenant)
     async getStudentCountsByBatch(batchId: number, tenantId: number): Promise<{ departmentId: number; count: number }[]> {
-        // Prefer the student's opted/cycle department, then fall back to their
-        // tenant-scoped user department for older profiles missing both links.
+        // Match the student list: opted department first, cycle department only
+        // for semesters 1-2, then the tenant-scoped user department when no
+        // applicable profile assignment exists.
         const counts = await prisma.$queryRaw<{ department_id: number; count: bigint }[]>`
-            SELECT COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id) as department_id,
+            SELECT COALESCE(
+                       sp.opted_department_id,
+                       CASE WHEN sp.current_semester <= 2 THEN sp.cycle_department_id END,
+                       u.department_id
+                   ) as department_id,
                    COUNT(*) as count
             FROM student_profiles sp
             INNER JOIN users u ON u.id = sp.user_id
             WHERE sp.batch_id = ${batchId}
               AND u.tenant_id = ${tenantId}
-              AND COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id) IS NOT NULL
-            GROUP BY COALESCE(sp.opted_department_id, sp.cycle_department_id, u.department_id)
+              AND u.role = 'STUDENT'
+              AND LEFT(LOWER(u.email), 8) <> 'deleted_'
+              AND COALESCE(
+                      sp.opted_department_id,
+                      CASE WHEN sp.current_semester <= 2 THEN sp.cycle_department_id END,
+                      u.department_id
+                  ) IS NOT NULL
+            GROUP BY COALESCE(
+                         sp.opted_department_id,
+                         CASE WHEN sp.current_semester <= 2 THEN sp.cycle_department_id END,
+                         u.department_id
+                     )
         `;
 
         return counts.map(c => ({ departmentId: Number(c.department_id), count: Number(c.count) }));
@@ -262,7 +277,10 @@ export const userRepository = {
                 },
                 {
                     optedDepartmentId: null,
-                    cycleDepartmentId: null,
+                    OR: [
+                        { cycleDepartmentId: null },
+                        { currentSemester: { gt: 2 } },
+                    ],
                     user: { departmentId: options.departmentId },
                 },
             ];
