@@ -8,7 +8,7 @@
     "scripts": {
         "dev": "node --import tsx --watch-path=./src src/index.ts",
         "build": "tsc",
-        "render-build": "npx prisma generate && NODE_NO_WARNINGS=1 node scripts/migrate-production.mjs && npx tsc --project tsconfig.json",
+        "render-build": "npx prisma generate && npx tsc --project tsconfig.json",
         "prestart": "NODE_NO_WARNINGS=1 node scripts/migrate-production.mjs",
         "start": "NODE_NO_WARNINGS=1 node dist/src/index.js",
         "db:generate": "prisma generate",

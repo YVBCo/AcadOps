@@ -1,127 +1,30 @@
 #!/usr/bin/env node
 
 /**
- * Production migration runner for Render.
+ * Synchronize the production database schema before starting the API.
  *
- * Existing databases that were initialized with `prisma db push` have no
- * Prisma migration history (P3005). In that case, sync the schema first and
- * only then baseline migrations. Baseline resolution must never precede the
- * schema sync, or newly added migrations can be marked as applied without
- * their SQL ever running.
+ * This production database was initialized with `prisma db push` and does not
+ * have a complete Prisma migration history. Running `migrate deploy` and then
+ * resolving every historical migration on each boot is unsafe: it creates
+ * many short-lived connections and has exhausted the Supabase session pool.
+ * Keep startup to the single schema-sync command used to initialize this DB.
  */
+import { execFileSync } from 'node:child_process';
 
-import { execSync } from 'child_process';
-import { readdirSync, statSync } from 'fs';
-import { join } from 'path';
+console.log('🔄 Synchronizing production database schema...');
 
-function run(cmd, silent = false) {
-    try {
-        const output = execSync(cmd, {
-            encoding: 'utf8',
-            stdio: 'pipe',
-            env: { ...process.env, NODE_NO_WARNINGS: '1' },
-        });
-        if (!silent && output) process.stdout.write(output);
-        return { success: true, output: output || '' };
-    } catch (err) {
-        const output = `${err.stdout?.toString() || ''}${err.stderr?.toString() || ''}`;
-        if (!silent && output) process.stderr.write(output);
-        return {
-            success: false,
-            output,
-            error: output || err.message || '',
-        };
-    }
+try {
+  const output = execFileSync('npx', ['prisma', 'db', 'push'], {
+    encoding: 'utf8',
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  });
+
+  if (output) process.stdout.write(output);
+  console.log('✅ Database schema synchronized; continuing startup.');
+} catch (error) {
+  const output = `${error.stdout?.toString() ?? ''}${error.stderr?.toString() ?? ''}`;
+  if (output) process.stderr.write(output);
+  console.error('❌ Database schema sync failed; refusing to start.');
+  if (!output) console.error(error.message);
+  process.exit(1);
 }
-
-function isCode(result, code) {
-    return result.error?.includes(code) || result.output?.includes(code);
-}
-
-function syncSchema() {
-    console.log('🔄 Verifying database schema against the current Prisma model...\n');
-    const result = run('npx prisma db push');
-    if (!result.success) {
-        console.error('\n❌ Database schema is not synchronized; refusing to deploy.');
-        process.exit(1);
-    }
-    console.log('✅ Database schema synchronized.');
-}
-
-console.log('🔄 Running production migration...\n');
-
-const migrateResult = run('npx prisma migrate deploy');
-if (migrateResult.success) {
-    console.log('✅ Migrations applied successfully!');
-    // Older releases could baseline migrations without applying their schema
-    // changes. Keep production aligned until every existing database is
-    // repaired, and fail the build if Prisma cannot safely reconcile drift.
-    syncSchema();
-    process.exit(0);
-}
-
-if (!isCode(migrateResult, 'P3005')) {
-    console.log('⚠️  migrate deploy failed — retrying once...\n');
-    const retry = run('npx prisma migrate deploy');
-    if (retry.success) {
-        console.log('✅ Migrations applied on retry!');
-        syncSchema();
-        process.exit(0);
-    }
-
-    console.error('\n❌ migrate deploy failed on retry; refusing to deploy against an unknown database schema.');
-    process.exit(1);
-}
-
-// P3005: existing tables but no migration history. First apply the current
-// Prisma schema, then baseline. This makes baselining an accurate record of
-// the schema state instead of silently skipping unapplied migration SQL.
-console.log('⚠️  Existing database has no migration history. Syncing schema before baselining...\n');
-const pushResult = run('npx prisma db push');
-if (!pushResult.success) {
-    console.error('\n❌ Schema sync failed; refusing to mark migrations applied or deploy.');
-    process.exit(1);
-}
-
-const migrationsDir = join(process.cwd(), 'prisma', 'migrations');
-const migrations = readdirSync(migrationsDir)
-    .filter(entry => {
-        const fullPath = join(migrationsDir, entry);
-        return statSync(fullPath).isDirectory() && /^\d{14}_/.test(entry);
-    })
-    .sort();
-
-let recorded = 0;
-for (const migration of migrations) {
-    const result = run(`npx prisma migrate resolve --applied "${migration}"`, true);
-    if (result.success || isCode(result, 'P3008')) {
-        recorded++;
-        continue;
-    }
-
-    console.error(`⚠️  Could not baseline migration ${migration}.`);
-    if (result.error) console.error(result.error);
-
-    // The database was just synchronized successfully. If the very first
-    // baseline record cannot be created, there is no partial migration
-    // history to deploy against; start the app using the verified schema and
-    // retain the detailed Prisma error for follow-up. Do not continue after a
-    // later failure, since some migrations may already have been recorded.
-    if (recorded === 0 && migration === migrations[0]) {
-        console.warn('\n⚠️  Schema sync succeeded; starting without migration history.');
-        console.warn('   Prisma migrate deploy will retry baseline setup on the next restart.');
-        process.exit(0);
-    }
-
-    console.error('❌ A partial migration baseline may exist; refusing to deploy.');
-    process.exit(1);
-}
-
-console.log('\n🔄 Verifying migration state...\n');
-const verification = run('npx prisma migrate deploy');
-if (!verification.success) {
-    console.error('\n❌ Migrations could not be verified after baselining.');
-    process.exit(1);
-}
-
-console.log('✅ Existing schema synced and migration history baselined successfully!');
