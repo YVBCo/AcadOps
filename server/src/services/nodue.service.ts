@@ -1,5 +1,6 @@
 import prisma from '../data-access/prisma.js';
 import { NodueClearanceStage, NodueDueStatus, NoduePaymentStatus, NodueDueType } from '@prisma/client';
+import { ApiError } from '../api/middleware/error.middleware.js';
 
 class NodueService {
     async logActivity(tenantId: number, userId: number, userRole: string, action: string, details?: string, targetId?: number) {
@@ -52,7 +53,7 @@ class NodueService {
             select: { id: true },
         });
         if (enrollments.length === 0) {
-            throw new Error('You must be enrolled in at least one subject before applying for clearance');
+            throw new ApiError(400, 'You must be enrolled in at least one subject before applying for clearance');
         }
 
         const request = await this.getClearanceRequest(tenantId, studentId);
