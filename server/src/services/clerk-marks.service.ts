@@ -98,6 +98,7 @@ class ClerkMarksService {
         // Validate: Course belongs to department
         const course = await prisma.course.findFirst({
             where: { id: courseId, departmentId },
+            select: { id: true, tenantId: true, semesterNumber: true, code: true },
         });
         if (!course) {
             throw new Error('Course does not belong to the specified department');
@@ -123,10 +124,45 @@ class ClerkMarksService {
             );
         }
 
-        // Create or update semester marks (status = PENDING)
-        const results = await Promise.all(
-            entries.map(entry =>
-                prisma.semesterEndMarks.upsert({
+        // Resolve user IDs for the same USNs so manual clerk entry can enter
+        // the existing COE review/post pipeline, which stores mark entries
+        // against student users.
+        const usns = entries.map(entry => entry.studentUsn);
+        const students = await prisma.user.findMany({
+            where: {
+                tenantId: course.tenantId,
+                departmentId,
+                role: 'STUDENT',
+                OR: [
+                    { studentProfile: { temporaryUsn: { in: usns } } },
+                    { studentProfile: { permanentUsn: { in: usns } } },
+                    { studentProfile: { rollNumber: { in: usns } } },
+                ],
+            },
+            include: { studentProfile: true },
+        });
+        const studentIdsByUsn = new Map<string, number>();
+        for (const student of students) {
+            const profile = student.studentProfile;
+            if (!profile || profile.batchId !== batchId) continue;
+            if (profile.temporaryUsn) studentIdsByUsn.set(profile.temporaryUsn, student.id);
+            if (profile.permanentUsn) studentIdsByUsn.set(profile.permanentUsn, student.id);
+            if (profile.rollNumber) studentIdsByUsn.set(profile.rollNumber, student.id);
+        }
+        const missingProfiles = entries.filter(entry => !studentIdsByUsn.has(entry.studentUsn));
+        if (missingProfiles.length > 0) {
+            throw Object.assign(
+                new Error('Student profiles not found for some submitted marks'),
+                { students: missingProfiles.map(entry => entry.studentUsn), statusCode: 400 }
+            );
+        }
+
+        // Keep the Clerk's manual records and COE review upload in the same
+        // transaction. Excel uploads store marks out of 100 and normalize to
+        // 50, so represent the Clerk's /50 marks equivalently.
+        await prisma.$transaction(async tx => {
+            for (const entry of entries) {
+                await tx.semesterEndMarks.upsert({
                     where: {
                         departmentId_batchId_courseId_studentUsn: {
                             departmentId,
@@ -152,19 +188,40 @@ class ClerkMarksService {
                         approvedBy: null,
                         approvedAt: null,
                     },
-                })
-            )
-        );
+                });
+            }
 
-        await auditLogRepository.create({
-            actorId: clerkId,
-            action: 'SUBMIT_SEMESTER_MARKS',
-            entityType: 'SemesterEndMarks',
-            entityId: courseId,
-            newValue: { departmentId, batchId, courseId, entriesCount: entries.length },
+            await tx.semesterMarkUpload.create({
+                data: {
+                    departmentId,
+                    batchId,
+                    courseId,
+                    semesterNumber: course.semesterNumber ?? 1,
+                    uploadedBy: clerkId,
+                    fileName: `Manual marks entry - ${course.code}`,
+                    status: 'PENDING',
+                    marks: {
+                        create: entries.map(entry => ({
+                            studentUsn: entry.studentUsn,
+                            studentId: studentIdsByUsn.get(entry.studentUsn)!,
+                            courseId,
+                            externalMarksRaw: entry.marks * 2,
+                            externalMarks: entry.marks,
+                        })),
+                    },
+                },
+            });
+
+            await auditLogRepository.create({
+                actorId: clerkId,
+                action: 'SUBMIT_SEMESTER_MARKS',
+                entityType: 'SemesterEndMarks',
+                entityId: courseId,
+                newValue: { departmentId, batchId, courseId, entriesCount: entries.length },
+            }, tx);
         });
 
-        return { count: results.length };
+        return { count: entries.length };
     }
 
     /**

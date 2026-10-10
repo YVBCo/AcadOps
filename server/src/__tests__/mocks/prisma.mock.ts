@@ -38,7 +38,7 @@ function createModelMock() {
 
 // All Prisma models in the schema
 const models = [
-    'user', 'tenant', 'department', 'batch', 'section', 'semester',
+    'user', 'tenant', 'department', 'batch', 'section', 'semester', 'internalMarksSubmission',
     'course', 'subject', 'program', 'studentProfile', 'teacherProfile',
     'parentProfile', 'attendance', 'internalMarksDetail', 'semesterEndMarks',
     'semesterMarkUpload', 'semesterMarkEntry', 'admissionData',

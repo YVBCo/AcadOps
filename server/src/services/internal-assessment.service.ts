@@ -456,11 +456,8 @@ class InternalAssessmentService {
             },
         });
 
-        let updated = 0;
-        const operations: any[] = [];
-
-        for (const mark of allMarks) {
-            const newTotal = this.calculateFinalInternal(
+        const changes = allMarks.flatMap(mark => {
+            const calculatedTotal = this.calculateFinalInternal(
                 mark.internal1,
                 mark.internal2,
                 mark.internal3,
@@ -468,29 +465,32 @@ class InternalAssessmentService {
                 config
             );
 
-            // Only update if the total actually changed
-            if (newTotal !== mark.calculatedTotal) {
-                operations.push(prisma.internalMarksDetail.update({
-                    where: { id: mark.id },
-                    data: { calculatedTotal: newTotal },
-                }));
-                updated++;
-            }
-        }
-
-        if (operations.length > 0) {
-            await prisma.$transaction(operations);
-        }
-
-        await auditLogRepository.create({
-            actorId,
-            action: 'RECALCULATE_ALL_MARKS',
-            entityType: 'InternalAssessmentConfig',
-            entityId: config.id,
-            newValue: { courseId, semesterNumber, recordsUpdated: updated } as Prisma.JsonValue,
+            return calculatedTotal !== mark.calculatedTotal
+                ? [{ id: mark.id, calculatedTotal }]
+                : [];
         });
 
-        return { updated };
+        // Keep the recalculated values and their audit record atomic. A callback
+        // transaction also avoids passing a dynamically built `any[]` of Prisma
+        // promises through the adapter's array-transaction implementation.
+        await prisma.$transaction(async tx => {
+            for (const change of changes) {
+                await tx.internalMarksDetail.update({
+                    where: { id: change.id },
+                    data: { calculatedTotal: change.calculatedTotal },
+                });
+            }
+
+            await auditLogRepository.create({
+                actorId,
+                action: 'RECALCULATE_ALL_MARKS',
+                entityType: 'InternalAssessmentConfig',
+                entityId: config.id,
+                newValue: { courseId, semesterNumber, recordsUpdated: changes.length } as Prisma.JsonValue,
+            }, tx);
+        });
+
+        return { updated: changes.length };
     }
 }
 
