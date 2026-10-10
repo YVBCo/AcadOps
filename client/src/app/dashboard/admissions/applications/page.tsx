@@ -212,7 +212,9 @@ export default function ApplicationsPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-slate-800">Applications</h1>
-                <span className="text-sm text-slate-500">{isError ? 'Unable to load total' : `${total} total`}</span>
+                <span className="text-sm text-slate-500">
+                    {isLoading ? 'Loading applications…' : isError ? 'Unable to load total' : `${total} total`}
+                </span>
             </div>
 
             {/* Filters */}
