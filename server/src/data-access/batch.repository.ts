@@ -25,7 +25,15 @@ export const batchRepository = {
             include: {
                 _count: {
                     select: {
-                        students: tenantId ? { where: { user: { tenantId } } } : true,
+                        students: tenantId ? {
+                            where: {
+                                user: {
+                                    tenantId,
+                                    role: 'STUDENT',
+                                    NOT: { email: { startsWith: 'deleted_' } },
+                                },
+                            },
+                        } : true,
                     },
                 },
             },
@@ -71,7 +79,15 @@ export const batchRepository = {
                         // A profile can reference a batch created by another tenant
                         // if it was imported before tenant validation. Never expose
                         // those students in this tenant's batch totals.
-                        students: tenantId ? { where: { user: { tenantId } } } : true,
+                        students: tenantId ? {
+                            where: {
+                                user: {
+                                    tenantId,
+                                    role: 'STUDENT',
+                                    NOT: { email: { startsWith: 'deleted_' } },
+                                },
+                            },
+                        } : true,
                     },
                 },
             },
@@ -82,7 +98,16 @@ export const batchRepository = {
     // Get students in a batch
     async getStudents(batchId: number, tenantId?: number): Promise<StudentProfile[]> {
         return prisma.studentProfile.findMany({
-            where: { batchId, ...(tenantId ? { user: { tenantId } } : {}) },
+            where: {
+                batchId,
+                ...(tenantId ? {
+                    user: {
+                        tenantId,
+                        role: 'STUDENT',
+                        NOT: { email: { startsWith: 'deleted_' } },
+                    },
+                } : {}),
+            },
             include: {
                 user: {
                     select: { id: true, name: true, email: true },

@@ -17,7 +17,17 @@ describe('batchRepository tenant isolation', () => {
             where: { tenantId: 14 },
             include: {
                 _count: {
-                    select: { students: { where: { user: { tenantId: 14 } } } },
+                    select: {
+                        students: {
+                            where: {
+                                user: {
+                                    tenantId: 14,
+                                    role: 'STUDENT',
+                                    NOT: { email: { startsWith: 'deleted_' } },
+                                },
+                            },
+                        },
+                    },
                 },
             },
         }));
@@ -29,7 +39,14 @@ describe('batchRepository tenant isolation', () => {
         await batchRepository.getStudents(22, 14);
 
         expect(prismaMock.studentProfile.findMany).toHaveBeenCalledWith(expect.objectContaining({
-            where: { batchId: 22, user: { tenantId: 14 } },
+            where: {
+                batchId: 22,
+                user: {
+                    tenantId: 14,
+                    role: 'STUDENT',
+                    NOT: { email: { startsWith: 'deleted_' } },
+                },
+            },
         }));
     });
 });
