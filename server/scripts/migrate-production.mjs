@@ -34,11 +34,25 @@ function isCode(result, code) {
     return result.error?.includes(code) || result.output?.includes(code);
 }
 
+function syncSchema() {
+    console.log('🔄 Verifying database schema against the current Prisma model...\n');
+    const result = run('npx prisma db push');
+    if (!result.success) {
+        console.error('\n❌ Database schema is not synchronized; refusing to deploy.');
+        process.exit(1);
+    }
+    console.log('✅ Database schema synchronized.');
+}
+
 console.log('🔄 Running production migration...\n');
 
 const migrateResult = run('npx prisma migrate deploy');
 if (migrateResult.success) {
     console.log('✅ Migrations applied successfully!');
+    // Older releases could baseline migrations without applying their schema
+    // changes. Keep production aligned until every existing database is
+    // repaired, and fail the build if Prisma cannot safely reconcile drift.
+    syncSchema();
     process.exit(0);
 }
 
@@ -47,6 +61,7 @@ if (!isCode(migrateResult, 'P3005')) {
     const retry = run('npx prisma migrate deploy');
     if (retry.success) {
         console.log('✅ Migrations applied on retry!');
+        syncSchema();
         process.exit(0);
     }
 
