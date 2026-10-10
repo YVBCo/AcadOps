@@ -48,7 +48,7 @@ const models = [
     'usnRequest', 'programCourse',
     'placementCompany', 'placementJob', 'placementStudentProfile', 'placementDrive',
     'placementApplication', 'placementCv', 'placementDeclaration', 'placementOfferLetter', 'placementRound',
-    'nodueClearanceRequest', 'nodueSubjectEnrollment', 'nodueLibraryDue', 'nodueStudentDue', 'nodueDue', 'nodueFineCategory',
+    'nodueClearanceRequest', 'nodueSubjectEnrollment', 'nodueLibraryDue', 'nodueStudentDue', 'nodueDue', 'nodueFineCategory', 'nodueActivityLog',
     'cycleDepartmentAllocation',
 ] as const;
 
